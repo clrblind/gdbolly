@@ -3,7 +3,8 @@ import styled from 'styled-components';
 export const MainContainer = styled.div`
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100vh; /* Strict height */
+  max-height: 100vh;
   width: 100vw;
   background-color: #d4d0c8;
   overflow: hidden; /* Prevent body scrollbars */
@@ -11,11 +12,12 @@ export const MainContainer = styled.div`
 `;
 
 export const Workspace = styled.div`
-  flex: 1;
+  flex: 1; /* Grow to fill available space */
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  overflow: hidden; /* Clip content */
+  min-height: 0; /* Critical for nested flex scrolling */
   padding: 2px;
 `;
 
@@ -24,6 +26,7 @@ export const HorizontalSplit = styled.div`
   flex-direction: row;
   width: 100%;
   overflow: hidden;
+  min-height: 0;
 `;
 
 export const VerticalResizer = styled.div`
@@ -51,8 +54,8 @@ export const HorizontalResizer = styled.div`
 
 export const Panel = styled.div`
   background: white;
-  border: 2px inset #fff; /* Inset look like Windows 98 */
-  overflow: hidden; /* Scroll handled inside content */
+  border: 2px inset #fff;
+  overflow: hidden; 
   font-family: 'Consolas', monospace;
   font-size: 13px;
   position: relative;
@@ -89,6 +92,7 @@ export const MenuBar = styled.div`
   padding: 0 5px;
   font-size: 12px;
   user-select: none;
+  flex-shrink: 0;
 `;
 
 export const MenuItem = styled.div`

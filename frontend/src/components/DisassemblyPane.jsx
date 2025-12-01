@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
 import { useSelector, useDispatch } from 'react-redux';
-import { setSelectedAddress } from '../store/debuggerSlice';
+import { 
+    selectAddress, toggleAddressSelection, selectAddressRange, 
+    pushHistory, setViewStartAddress 
+} from '../store/debuggerSlice';
 
 const PaneContainer = styled.div`
   display: flex;
@@ -59,14 +62,23 @@ const Row = styled.div`
   white-space: pre;
   height: 16px;
   line-height: 16px;
+  user-select: none; /* Prevents text selection on shift-click */
   
-  /* Current IP (Black text on Grey) - High priority visual */
-  background-color: ${props => props.$current ? '#c0c0c0' : props.$selected ? '#000080' : 'transparent'};
-  color: ${props => props.$current ? '#000000' : props.$selected ? '#ffffff' : 'inherit'};
+  background-color: ${props => 
+    props.$selected ? '#000080' : 
+    props.$modified ? '#000000' : 
+    props.$current ? '#c0c0c0' : 'transparent'
+  };
+  
+  color: ${props => 
+    props.$selected ? '#ffffff' : 
+    props.$modified ? '#ff0000' : 
+    props.$current ? '#000000' : 'inherit'
+  };
 
   &:hover {
-    border: ${props => (!props.$selected && !props.$current) ? '1px solid #000' : 'none'};
-    margin: ${props => (!props.$selected && !props.$current) ? '-1px' : '0'};
+    border: ${props => (!props.$selected && !props.$current && !props.$modified) ? '1px solid #000' : 'none'};
+    margin: ${props => (!props.$selected && !props.$current && !props.$modified) ? '-1px' : '0'};
   }
 `;
 
@@ -80,21 +92,23 @@ const Cell = styled.div`
   box-sizing: border-box;
 `;
 
-// Specific styling for mnemonics
 const Mnemonic = styled.span`
-  color: ${props => props.$selected ? '#fff' : props.$isCall ? '#0000ff' : '#000'};
+  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : props.$isCall ? '#0000ff' : '#000'};
   font-weight: ${props => props.$isCall ? 'bold' : 'normal'};
 `;
 
 const Operands = styled.span`
-  color: ${props => props.$selected ? '#fff' : '#000'};
+  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : '#000'};
 `;
 
 const CommentText = styled.span`
-  color: ${props => props.$selected ? '#fff' : '#808080'};
+  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : '#808080'};
 `;
 
-// Tooltip for resizing
+const HexDump = styled.div`
+  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : '#808080'};
+`;
+
 const ResizeTooltip = styled.div`
     position: fixed;
     background: #ffffe1;
@@ -108,17 +122,22 @@ const ResizeTooltip = styled.div`
 const DisassemblyPane = ({ onContextMenu }) => {
   const dispatch = useDispatch();
   const instructions = useSelector(state => state.debug.disassembly);
-  const selectedAddr = useSelector(state => state.debug.selectedAddress);
+  const selectedAddresses = useSelector(state => state.debug.selectedAddresses);
+  const lastSelected = useSelector(state => state.debug.lastSelectedAddress);
   const userComments = useSelector(state => state.debug.userComments);
   const settings = useSelector(state => state.debug.settings);
+  const registers = useSelector(state => state.debug.registers);
+  const modifiedAddresses = useSelector(state => state.debug.modifiedAddresses);
   
-  // Column widths state
-  const [colWidths, setColWidths] = useState([80, 100, 200, 250]); // Address, Hex, Opcode, Comment
+  // Find EIP
+  const ripReg = registers.find(r => r.number === '16' || r.number === 'rip' || r.number === 'eip'); // 16 for x64 usually
+  const currentIP = ripReg ? ripReg.value : null;
+
+  const [colWidths, setColWidths] = useState([140, 160, 680, 180]); 
   const headers = ['Address', 'Hex dump', 'Disassembly', 'Comment'];
   
-  // Resizing state
   const resizingRef = useRef(null);
-  const [resizeTooltip, setResizeTooltip] = useState(null); // {x, y, width}
+  const [resizeTooltip, setResizeTooltip] = useState(null);
 
   const startResize = (index, e) => {
     e.preventDefault();
@@ -132,18 +151,12 @@ const DisassemblyPane = ({ onContextMenu }) => {
     const { index, startX, startWidth } = resizingRef.current;
     const delta = e.clientX - startX;
     const newWidth = Math.max(30, startWidth + delta);
-    
     setColWidths(prev => {
       const next = [...prev];
       next[index] = newWidth;
       return next;
     });
-
-    setResizeTooltip({
-        x: e.clientX + 10,
-        y: e.clientY + 10,
-        width: newWidth
-    });
+    setResizeTooltip({ x: e.clientX + 10, y: e.clientY + 10, width: newWidth });
   };
 
   const handleMouseUp = () => {
@@ -153,41 +166,100 @@ const DisassemblyPane = ({ onContextMenu }) => {
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
-  const handleRowClick = (addr) => {
-    dispatch(setSelectedAddress(addr));
+  const handleRowClick = (e, addr, index) => {
+    if (e.ctrlKey) {
+        dispatch(toggleAddressSelection(addr));
+    } else if (e.shiftKey && lastSelected) {
+        const lastIdx = instructions.findIndex(i => i.address === lastSelected);
+        if (lastIdx !== -1) {
+            const start = Math.min(lastIdx, index);
+            const end = Math.max(lastIdx, index);
+            const range = instructions.slice(start, end + 1).map(i => i.address);
+            dispatch(selectAddressRange(range));
+        } else {
+            dispatch(selectAddress(addr));
+        }
+    } else {
+        dispatch(selectAddress(addr));
+    }
   };
 
   const handleRightClick = (e, inst) => {
     e.preventDefault();
-    dispatch(setSelectedAddress(inst.address));
-    if (onContextMenu) {
-        onContextMenu(e, inst);
+    if (!selectedAddresses.includes(inst.address)) {
+        dispatch(selectAddress(inst.address));
     }
+    if (onContextMenu) onContextMenu(e, inst);
+  };
+
+  const handleDoubleClick = (inst) => {
+      // Logic to follow call/jmp
+      const parts = inst.inst.split(' ');
+      for (let part of parts) {
+          if (part.startsWith('0x')) {
+              const target = part.replace(/[,]/g, '');
+              dispatch(pushHistory(instructions[0].address)); // Save current view start
+              dispatch(setViewStartAddress(target));
+              return;
+          }
+      }
+  };
+
+  const formatTextCase = (text) => {
+      return settings.listingCase === 'upper' ? text.toUpperCase() : text.toLowerCase();
+  };
+
+  const highlightRegisters = (text) => {
+      const regRegex = /\b(eax|ebx|ecx|edx|esi|edi|esp|ebp|rax|rbx|rcx|rdx|rsi|rdi|rsp|rbp|r8|r9|r10|r11|r12|r13|r14|r15|rip|eip|al|ah|bl|bh|cl|ch|dl|dh)\b/gi;
+      const parts = text.split(regRegex);
+      return parts.map((part, i) => {
+          if (part.match(regRegex)) {
+              return <b key={i}>{part}</b>;
+          }
+          return part;
+      });
   };
 
   const parseInstruction = (instData) => {
-    // instData has { address, inst, opcodes, ... }
-    // inst string might look like "mov eax, 1 # comment"
-    
     let rawInst = instData.inst || "";
     let mnemonic = "";
     let operands = "";
     let gdbComment = "";
 
-    // 1. Separate GDB comment (starts with #)
     const commentSplit = rawInst.split('#');
     let codePart = commentSplit[0].trim();
     if (commentSplit.length > 1) {
         gdbComment = commentSplit.slice(1).join('#').trim();
     }
 
-    // 2. Parse Mnemonic vs Operands
     const spaceIdx = codePart.indexOf(' ');
     if (spaceIdx === -1) {
         mnemonic = codePart;
     } else {
         mnemonic = codePart.substring(0, spaceIdx);
-        operands = codePart.substring(spaceIdx); // Keep leading space for visuals
+        operands = codePart.substring(spaceIdx).trim(); 
+    }
+
+    mnemonic = formatTextCase(mnemonic);
+    operands = formatTextCase(operands);
+    
+    // Register Naming
+    if (settings.registerNaming === 'percent') {
+        operands = operands.replace(/\b(rax|rbx|rcx|rdx|rsi|rdi|rsp|rbp|r[0-9]+|eip|rip)\b/gi, '%$1');
+        operands = operands.replace(/%%/g, '%');
+    }
+
+    // Swap Arguments (if 2 args exist)
+    if (settings.swapArguments && operands.includes(',')) {
+        // Simple splitting by first comma (basic heuristic)
+        // Note: this assumes operands structure like "op1, op2"
+        const parts = operands.split(',');
+        if (parts.length >= 2) {
+             // Reconstruct: op2, op1
+             const op1 = parts[0].trim();
+             const rest = parts.slice(1).join(',').trim(); // op2
+             operands = `${rest},${op1}`;
+        }
     }
 
     return { mnemonic, operands, gdbComment };
@@ -206,18 +278,18 @@ const DisassemblyPane = ({ onContextMenu }) => {
       
       <ContentArea>
         {instructions.map((inst, idx) => {
-          const isCurrentIP = idx === 0; // Assuming first item is IP
-          const isSelected = selectedAddr === inst.address;
+          const isCurrentIP = BigInt(inst.address) === (currentIP ? BigInt(currentIP) : BigInt(-1));
+          const isSelected = selectedAddresses.includes(inst.address);
+          const isModified = modifiedAddresses.includes(inst.address);
+          
           const { mnemonic, operands, gdbComment } = parseInstruction(inst);
           const isCall = mnemonic.toLowerCase().startsWith('call');
           
-          // Comment Logic: User > GDB (if enabled)
           let displayComment = userComments[inst.address];
           if (!displayComment && settings.showGdbComments && gdbComment) {
              displayComment = gdbComment;
           }
 
-          // Hex formatting
           const hexDump = inst.opcodes || "??";
 
           return (
@@ -225,17 +297,22 @@ const DisassemblyPane = ({ onContextMenu }) => {
               key={inst.address} 
               $current={isCurrentIP} 
               $selected={isSelected}
-              onClick={() => handleRowClick(inst.address)}
+              $modified={isModified}
+              onClick={(e) => handleRowClick(e, inst.address, idx)}
               onContextMenu={(e) => handleRightClick(e, inst)}
+              onDoubleClick={() => handleDoubleClick(inst)}
             >
                <Cell style={{ width: colWidths[0] }}>{inst.address}</Cell>
-               <Cell style={{ width: colWidths[1], color: isSelected ? '#fff' : '#808080' }}>{hexDump}</Cell> 
+               <Cell style={{ width: colWidths[1] }}>
+                   <HexDump $selected={isSelected} $modified={isModified}>{hexDump}</HexDump>
+               </Cell> 
                <Cell style={{ width: colWidths[2] }}>
-                 <Mnemonic $isCall={isCall} $selected={isSelected}>{mnemonic}</Mnemonic>
-                 <Operands $selected={isSelected}>{operands}</Operands>
+                 <Mnemonic $isCall={isCall} $selected={isSelected} $modified={isModified}>{mnemonic}</Mnemonic>
+                 &nbsp;
+                 <Operands $selected={isSelected} $modified={isModified}>{highlightRegisters(operands)}</Operands>
                </Cell>
                <Cell style={{ width: colWidths[3] }}>
-                 <CommentText $selected={isSelected}>{displayComment}</CommentText>
+                 <CommentText $selected={isSelected} $modified={isModified}>{displayComment}</CommentText>
                </Cell>
             </Row>
           );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import styled from 'styled-components';
 
 const Overlay = styled.div`
@@ -7,7 +7,7 @@ const Overlay = styled.div`
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0,0,0,0.1);
+  background: rgba(0,0,0,0.1); /* Minimal dimming */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -21,6 +21,7 @@ const Window = styled.div`
   min-width: 300px;
   display: flex;
   flex-direction: column;
+  position: relative;
 `;
 
 const TitleBar = styled.div`
@@ -34,6 +35,7 @@ const TitleBar = styled.div`
   justify-content: space-between;
   align-items: center;
   user-select: none;
+  cursor: default;
 `;
 
 const CloseButton = styled.button`
@@ -75,12 +77,51 @@ const XPButton = styled.button`
 `;
 
 const XPModal = ({ title, children, onClose, onOk }) => {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Enter' && onOk && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
+          // Careful with Enter on Inputs, sometimes it should submit, sometimes not.
+          onOk();
+      }
+      if (e.key === 'Enter' && onOk && e.target.tagName === 'INPUT') {
+          onOk();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, onOk]);
+
+  const handleMouseDown = (e) => {
+      isDragging.current = true;
+      dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (e) => {
+      if (!isDragging.current) return;
+      const newX = e.clientX - dragStart.current.x;
+      const newY = e.clientY - dragStart.current.y;
+      setPosition({ x: newX, y: newY });
+  };
+
+  const handleMouseUp = () => {
+      isDragging.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+  };
+
   return (
     <Overlay>
-      <Window>
-        <TitleBar>
+      <Window style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
+        <TitleBar onMouseDown={handleMouseDown}>
           <span>{title}</span>
-          <CloseButton onClick={onClose}>x</CloseButton>
+          <CloseButton onClick={(e) => { e.stopPropagation(); onClose(); }}>x</CloseButton>
         </TitleBar>
         <Content>
           {children}

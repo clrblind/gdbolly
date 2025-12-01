@@ -71,6 +71,38 @@ class GDBController:
         except (BrokenPipeError, ConnectionResetError):
             await self.stop()
 
+    async def write_memory(self, address: str, bytes_list: list):
+        """Writes bytes to memory using GDB set command"""
+        if not bytes_list: 
+            return
+
+        # Валидация байтов, чтобы избежать TypeError: unsupported format string passed to NoneType
+        clean_bytes = []
+        for b in bytes_list:
+            if b is None:
+                continue # Пропускаем или заменяем на 0x00
+            clean_bytes.append(b)
+            
+        if not clean_bytes:
+            return
+
+        addr_int = int(address, 16)
+        
+        # Construct array string: {0x90, 0x90}
+        bytes_str = ", ".join([f"{b:#04x}" for b in clean_bytes])
+        cmd = f"set {{unsigned char[{len(clean_bytes)}]}}{address} = {{{bytes_str}}}"
+        
+        await self.send_command(cmd)
+
+    async def get_disassembly(self, start_addr: str, end_addr: str = None, count: int = 50):
+        """Request disassembly for specific range or count"""
+        if end_addr:
+            cmd = f"-data-disassemble -s {start_addr} -e {end_addr} -- 2"
+        else:
+            pass
+            
+        pass
+
     async def _read_stdout(self, process_instance):
         """
         Читаем stdout конкретного экземпляра процесса.
@@ -113,19 +145,20 @@ class GDBController:
     async def _handle_stop(self, event):
         payload = event.get('payload', {}) or {}
         reason = payload.get('reason', 'unknown')
+        thread_id = payload.get('thread-id', None)
         
+        # Send thread info if available
+        if thread_id:
+             await self.msg_queue.put({"type": "thread-update", "payload": thread_id})
+
         await self.msg_queue.put({"type": "status", "payload": "PAUSED"})
         
         if reason in ['exited-normally', 'exited']:
              await self.msg_queue.put({"type": "status", "payload": "EXITED"})
              return
 
-        # Запрашиваем контекст
-        # Получаем регистры (x - Hex format)
+        # Запрашиваем только регистры. Дизассемблер запрашивается фронтендом для контроля позиции
         await self.send_command("-data-list-register-values x")
-        
-        # Дизассемблер
-        # Используем режим 2 (Assembly with opcodes) чтобы получить поле 'opcodes' для Hex Dump
-        await self.send_command("-data-disassemble -s $pc -e $pc+50 -- 2")
 
+# Initialize global instance
 gdb = GDBController()

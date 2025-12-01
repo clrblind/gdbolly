@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 
 const MenuContainer = styled.div`
@@ -11,7 +11,7 @@ const MenuContainer = styled.div`
   padding: 2px;
 `;
 
-const MenuItem = styled.div`
+const MenuItemStyled = styled.div`
   padding: 4px 10px;
   cursor: pointer;
   font-family: 'Tahoma', sans-serif;
@@ -19,6 +19,7 @@ const MenuItem = styled.div`
   color: #000;
   display: flex;
   justify-content: space-between;
+  position: relative;
 
   &:hover {
     background-color: #000080;
@@ -30,11 +31,17 @@ const MenuItem = styled.div`
   padding-bottom: ${props => props.$separator ? '2px' : '4px'};
 `;
 
+const ArrowRight = styled.span`
+  margin-left: 10px;
+  font-size: 9px;
+`;
+
 const ContextMenu = ({ x, y, items, onClose }) => {
   const menuRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
+      // Logic complicated by submenus. Simplified: check if target is inside menuRef
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         onClose();
       }
@@ -45,26 +52,51 @@ const ContextMenu = ({ x, y, items, onClose }) => {
 
   if (!items || items.length === 0) return null;
 
-  // Prevent menu from going off-screen
+  // Ensure menu stays on screen (simple check)
   const style = {
-    left: x,
-    top: y,
+    left: Math.min(x, window.innerWidth - 160),
+    top: Math.min(y, window.innerHeight - (items.length * 25)),
   };
 
   return (
     <MenuContainer ref={menuRef} style={style}>
       {items.map((item, index) => (
-        <MenuItem 
-            key={index} 
-            onClick={() => { item.action(); onClose(); }}
-            $separator={item.separator}
-        >
-          <span>{item.label}</span>
-          {item.hotkey && <span>{item.hotkey}</span>}
-        </MenuItem>
+         <MenuItemWithSub key={index} item={item} onClose={onClose} />
       ))}
     </MenuContainer>
   );
+};
+
+const MenuItemWithSub = ({ item, onClose }) => {
+    const [showSub, setShowSub] = useState(false);
+
+    const handleClick = (e) => {
+        if (item.action) {
+            item.action();
+            onClose();
+        }
+    };
+
+    return (
+        <MenuItemStyled 
+            $separator={item.separator}
+            onClick={handleClick}
+            onMouseEnter={() => setShowSub(true)}
+            onMouseLeave={() => setShowSub(false)}
+        >
+            <span>{item.label}</span>
+            {item.hotkey && <span>{item.hotkey}</span>}
+            {item.submenu && <ArrowRight>▶</ArrowRight>}
+
+            {item.submenu && showSub && (
+                <MenuContainer style={{ left: '100%', top: -2 }}>
+                    {item.submenu.map((subItem, idx) => (
+                        <MenuItemWithSub key={idx} item={subItem} onClose={onClose} />
+                    ))}
+                </MenuContainer>
+            )}
+        </MenuItemStyled>
+    );
 };
 
 export default ContextMenu;
