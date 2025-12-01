@@ -6,7 +6,8 @@ export const MainContainer = styled.div`
   height: 100vh;
   width: 100vw;
   background-color: #d4d0c8;
-  overflow: hidden;
+  overflow: hidden; /* Prevent body scrollbars */
+  box-sizing: border-box;
 `;
 
 export const Workspace = styled.div`
@@ -15,6 +16,7 @@ export const Workspace = styled.div`
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  padding: 2px;
 `;
 
 export const HorizontalSplit = styled.div`
@@ -67,9 +69,9 @@ export const Toolbar = styled.div`
   border-top: 1px solid white;
   border-bottom: 1px solid #808080;
   flex-shrink: 0;
+  gap: 5px;
   
   button {
-    margin-right: 5px;
     padding: 2px 8px;
     font-size: 12px;
     background: #d4d0c8;
@@ -95,5 +97,26 @@ export const MenuItem = styled.div`
   &:hover {
     background-color: #000080;
     color: white;
+  }
+`;
+
+export const StatusBar = styled.div`
+  height: 20px;
+  background: #d4d0c8;
+  border-top: 1px solid #808080;
+  display: flex;
+  align-items: center;
+  padding: 0 5px;
+  font-family: 'Tahoma', sans-serif;
+  font-size: 11px;
+  flex-shrink: 0;
+  
+  & > div {
+    border: 1px inset #fff;
+    padding: 0 4px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    margin-right: 2px;
   }
 `;

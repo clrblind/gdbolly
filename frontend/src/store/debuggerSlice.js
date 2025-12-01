@@ -6,6 +6,14 @@ const initialState = {
   disassembly: [],
   logs: [],
   selectedAddress: null, // Address selected by user (cursor)
+  
+  // User customizations
+  userComments: {}, // { "0x4005d0": "My custom comment" }
+  
+  // Settings
+  settings: {
+    showGdbComments: true,
+  },
 };
 
 export const debuggerSlice = createSlice({
@@ -28,6 +36,17 @@ export const debuggerSlice = createSlice({
     setSelectedAddress: (state, action) => {
       state.selectedAddress = action.payload;
     },
+    setUserComment: (state, action) => {
+      const { address, comment } = action.payload;
+      if (comment === null || comment === '') {
+        delete state.userComments[address];
+      } else {
+        state.userComments[address] = comment;
+      }
+    },
+    toggleShowGdbComments: (state, action) => {
+        state.settings.showGdbComments = action.payload;
+    },
     clearLogs: (state) => {
       state.logs = [];
     }
@@ -39,6 +58,8 @@ export const {
   updateRegisters, 
   updateDisassembly, 
   addLog, 
-  setSelectedAddress 
+  setSelectedAddress,
+  setUserComment,
+  toggleShowGdbComments
 } = debuggerSlice.actions;
 export default debuggerSlice.reducer;

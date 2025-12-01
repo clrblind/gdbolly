@@ -123,7 +123,9 @@ class GDBController:
         # Запрашиваем контекст
         # Получаем регистры (x - Hex format)
         await self.send_command("-data-list-register-values x")
+        
         # Дизассемблер
-        await self.send_command("-data-disassemble -s $pc -e $pc+50 -- 0")
+        # Используем режим 2 (Assembly with opcodes) чтобы получить поле 'opcodes' для Hex Dump
+        await self.send_command("-data-disassemble -s $pc -e $pc+50 -- 2")
 
 gdb = GDBController()
