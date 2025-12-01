@@ -1,14 +1,13 @@
+
 import styled from 'styled-components';
 
 export const MainContainer = styled.div`
   display: flex;
   flex-direction: column;
-  height: 100vh; /* Strict height */
-  max-height: 100vh;
-  width: 100vw;
+  height: 100%; /* Fill #root */
+  width: 100%;  /* Fill #root */
   background-color: #d4d0c8;
-  overflow: hidden; /* Prevent body scrollbars */
-  box-sizing: border-box;
+  overflow: hidden; 
 `;
 
 export const Workspace = styled.div`
