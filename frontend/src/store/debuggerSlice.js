@@ -4,7 +4,8 @@ const initialState = {
   status: 'IDLE', // IDLE, RUNNING, PAUSED, EXITED
   registers: [],
   disassembly: [],
-  logs: []
+  logs: [],
+  selectedAddress: null, // Address selected by user (cursor)
 };
 
 export const debuggerSlice = createSlice({
@@ -16,7 +17,6 @@ export const debuggerSlice = createSlice({
     },
     updateRegisters: (state, action) => {
       // action.payload = [{number: '1', value: '0x...'}, ...]
-      // В реальном Olly тут нужно сравнивать с предыдущим, чтобы подсветить красным
       state.registers = action.payload;
     },
     updateDisassembly: (state, action) => {
@@ -25,11 +25,20 @@ export const debuggerSlice = createSlice({
     addLog: (state, action) => {
       state.logs.push(action.payload);
     },
+    setSelectedAddress: (state, action) => {
+      state.selectedAddress = action.payload;
+    },
     clearLogs: (state) => {
       state.logs = [];
     }
   },
 });
 
-export const { setStatus, updateRegisters, updateDisassembly, addLog } = debuggerSlice.actions;
+export const { 
+  setStatus, 
+  updateRegisters, 
+  updateDisassembly, 
+  addLog, 
+  setSelectedAddress 
+} = debuggerSlice.actions;
 export default debuggerSlice.reducer;

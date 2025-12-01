@@ -74,8 +74,6 @@ class GDBController:
     async def _read_stdout(self, process_instance):
         """
         Читаем stdout конкретного экземпляра процесса.
-        Если self.process изменится извне, этот цикл продолжит работать со старым (пока его не убьют)
-        или корректно завершится при cancel.
         """
         try:
             while True:
@@ -84,29 +82,37 @@ class GDBController:
                     break
                 
                 decoded = line.decode().strip()
+                # print(f"[GDB RAW] {decoded}") # Debug logic
                 parsed = parse_response(decoded)
                 
+                # Защита от NoneType payload
+                if not parsed:
+                    continue
+                    
+                msg_type = parsed.get('type')
+                payload = parsed.get('payload')
+
                 # Обработка остановки
-                if parsed['type'] == 'notify' and parsed['message'] == 'stopped':
+                if msg_type == 'notify' and parsed.get('message') == 'stopped':
                     await self._handle_stop(parsed)
                 
-                elif parsed['type'] == 'result' and 'register-values' in parsed['payload']:
-                    await self.msg_queue.put({"type": "registers", "payload": parsed['payload']['register-values']})
-                
-                elif parsed['type'] == 'result' and 'asm_insns' in parsed['payload']:
-                    await self.msg_queue.put({"type": "disassembly", "payload": parsed['payload']['asm_insns']})
+                # Обработка результатов (registers, disassembly)
+                elif msg_type == 'result' and payload:
+                    if 'register-values' in payload:
+                        await self.msg_queue.put({"type": "registers", "payload": payload['register-values']})
+                    elif 'asm_insns' in payload:
+                        await self.msg_queue.put({"type": "disassembly", "payload": payload['asm_insns']})
                     
         except asyncio.CancelledError:
-            # Задача была отменена через stop()
             raise
         except Exception as e:
             print(f"[GDB] Read Error: {e}")
-            # Если ошибка ввода-вывода, возможно процесс умер
             if process_instance.returncode is not None:
                 await self.msg_queue.put({"type": "status", "payload": "EXITED"})
 
     async def _handle_stop(self, event):
-        reason = event['payload'].get('reason', 'unknown')
+        payload = event.get('payload', {}) or {}
+        reason = payload.get('reason', 'unknown')
         
         await self.msg_queue.put({"type": "status", "payload": "PAUSED"})
         
@@ -115,7 +121,9 @@ class GDBController:
              return
 
         # Запрашиваем контекст
+        # Получаем регистры (x - Hex format)
         await self.send_command("-data-list-register-values x")
+        # Дизассемблер
         await self.send_command("-data-disassemble -s $pc -e $pc+50 -- 0")
 
 gdb = GDBController()
