@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: ./backend
+    container_name: olly_backend
+    volumes:
+      - ./targets:/targets  # Прокидываем папку с бинарниками внутрь
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    stdin_open: true
+    tty: true
+
+  frontend:
+    build: ./frontend
+    container_name: olly_frontend
+    ports:
+      - "3333:3000" # Vite dev server port
+    volumes:
+      - ./frontend/src:/app/src # Hot-reload
+    environment:
+      - CHOKIDAR_USEPOLLING=true # Фикс для hot-reload в Docker на Windows/Mac
+    depends_on:
+      - backend
