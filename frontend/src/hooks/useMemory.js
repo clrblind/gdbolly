@@ -43,6 +43,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
     };
     
     const handleResetDB = async () => {
+        dispatch(addSystemLog({ message: "Action: Reset Database", type: 'warning' }));
         await apiCall('/database/reset');
         handleSessionLoad();
     };
@@ -51,6 +52,8 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         const toRevert = selectedAddresses.filter(addr => modifiedAddresses.includes(addr));
         if (toRevert.length === 0) return;
         
+        dispatch(addSystemLog(`Action: Revert ${toRevert.length} addresses starting at ${toRevert[0]}`));
+
         for (let addr of toRevert) {
             const res = await apiCall('/memory/revert', { address: addr });
             // Strict check: Only update state if backend confirmed
@@ -85,6 +88,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
             await apiCall('/session/comment', { address: addr, comment: commentInput });
             dispatch(setUserComment({ address: addr, comment: commentInput }));
         }
+        dispatch(addSystemLog(`Action: Added comment to ${selectedAddresses.join(', ')}: "${commentInput}"`));
         setActiveModal(null);
     };
 
@@ -99,6 +103,8 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         
         let successCount = 0;
         let totalModified = [];
+
+        dispatch(addSystemLog(`Action: Patching ${patches.length} lines`));
 
         for (let p of patches) {
             let payloadBytes = [];
@@ -170,6 +176,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
             try { document.execCommand('copy'); } catch (err) { console.error(err); }
             document.body.removeChild(textArea);
         }
+        dispatch(addSystemLog("Action: Copied to clipboard"));
     };
   
     const performCopy = (type, subFormat = null) => {

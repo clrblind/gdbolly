@@ -22,6 +22,7 @@ db_manager = None
 settings_manager = SettingsManager()
 
 async def broadcast_log(msg: str):
+    # Frontend handles timestamps and formatting, just send raw message
     await gdb.msg_queue.put({"type": "system_log", "payload": msg})
 
 def bytes_to_hex_str(bytes_list):
@@ -137,9 +138,7 @@ async def write_memory(payload: dict = Body(...)):
     
     await broadcast_log(f"Request write at {address}: {bytes_to_hex_str(new_bytes)}")
 
-    # 1. Read original bytes
-    # IMPORTANT: We must wait for this. If it returns empty, it means GDB failed to read memory 
-    # (maybe process not running or bad address). We MUST NOT proceed to write.
+    # 1. Read original bytes (Wait for reliable response)
     orig_bytes = await gdb.read_memory(address, len(new_bytes))
     
     if not orig_bytes:

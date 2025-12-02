@@ -1,6 +1,8 @@
+
 import React from 'react';
 import styled from 'styled-components';
 import { useSelector } from 'react-redux';
+import { REG_NAMES } from '../utils/asmFormatter';
 
 const RegRow = styled.div`
   display: flex;
@@ -18,13 +20,6 @@ const RegName = styled.div`
 const RegVal = styled.div`
   color: #000000;
 `;
-
-// Карта имен регистров (GDB шлет номера, нам бы маппинг, но пока выведем как есть или номер)
-// Для x86_64 основные: 0=rax, 1=rbx, 2=rcx, 3=rdx... 16=rip
-const REG_NAMES = {
-    "0": "RAX", "1": "RBX", "2": "RCX", "3": "RDX", "4": "RSI", "5": "RDI", 
-    "6": "RBP", "7": "RSP", "16": "RIP", "17": "EFLAGS"
-};
 
 const RegistersPane = () => {
   const regs = useSelector(state => state.debug.registers);

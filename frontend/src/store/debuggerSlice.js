@@ -43,6 +43,15 @@ const initialState = {
   },
 };
 
+const formatTime = () => {
+    const now = new Date();
+    const h = now.getHours().toString().padStart(2, '0');
+    const m = now.getMinutes().toString().padStart(2, '0');
+    const s = now.getSeconds().toString().padStart(2, '0');
+    const ms = now.getMilliseconds().toString().padStart(3, '0');
+    return `${h}:${m}:${s}.${ms}`;
+};
+
 export const debuggerSlice = createSlice({
   name: 'debugger',
   initialState,
@@ -74,18 +83,32 @@ export const debuggerSlice = createSlice({
           ...item,
           address: normalizeAddress(item.address)
       }));
+      // Only force set viewStartAddress if it wasn't set (initial load)
+      // or if the buffer changed significantly and we want to ensure sync.
+      // But typically handleGoTo sets viewStartAddress *before* fetching.
       if (!state.viewStartAddress && action.payload.length > 0) {
           state.viewStartAddress = normalizeAddress(action.payload[0].address);
       }
     },
     addSystemLog: (state, action) => {
-      // payload is expected to be object { timestamp, message, type }
+      // payload can be string OR object { message, type }
+      let message = "";
+      let type = "info";
+
+      if (typeof action.payload === 'string') {
+          message = action.payload;
+      } else {
+          message = action.payload.message;
+          type = action.payload.type || "info";
+      }
+
       if (state.systemLogs.length > 2000) state.systemLogs.shift();
+      
       const entry = {
           id: Date.now() + Math.random(),
-          timestamp: action.payload.timestamp || new Date().toLocaleTimeString(),
-          message: action.payload.message || action.payload, // fallback for string
-          type: action.payload.type || 'info'
+          timestamp: formatTime(),
+          message: message,
+          type: type
       };
       state.systemLogs.push(entry);
     },

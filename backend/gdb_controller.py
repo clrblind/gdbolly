@@ -1,6 +1,7 @@
 
 import asyncio
 import os
+import uuid
 from pygdbmi.gdbmiparser import parse_response
 
 class GDBController:
@@ -8,6 +9,7 @@ class GDBController:
         self.process = None
         self.io_task = None
         self.msg_queue = asyncio.Queue()
+        self.callbacks = {}
 
     async def start(self, binary_path: str):
         # Сначала полностью останавливаем предыдущую сессию
@@ -36,6 +38,8 @@ class GDBController:
 
     async def stop(self):
         """Корректная остановка процесса и задач чтения"""
+        self.callbacks.clear()
+        
         if self.io_task and not self.io_task.done():
             self.io_task.cancel()
             try:
@@ -72,19 +76,18 @@ class GDBController:
         if not self.process:
             return []
 
-        token = "req_mem"
+        # Generate unique token for this request
+        token = str(uuid.uuid4().hex)
         future = asyncio.get_event_loop().create_future()
-        
-        if not hasattr(self, 'callbacks'):
-            self.callbacks = {}
         
         self.callbacks[token] = future
         
-        # Use GDB MI command
+        # Use GDB MI command with token
         await self.send_command(f"{token}-data-read-memory-bytes {address} {length}")
         
         try:
-            result = await asyncio.wait_for(future, timeout=2.0)
+            # Increased timeout to 4.0s for stability
+            result = await asyncio.wait_for(future, timeout=4.0)
             # Result is the payload dict
             # {memory=[{begin="...", offset="...", end="...", contents="hex..."}]}
             memory = result.get('memory', [])
@@ -94,7 +97,7 @@ class GDBController:
                     return [int(contents[i:i+2], 16) for i in range(0, len(contents), 2)]
             return []
         except asyncio.TimeoutError:
-            print(f"[GDB] Read memory timeout for {address}")
+            print(f"[GDB] Read memory timeout for {address} (Token: {token})")
             return []
         except Exception as e:
             print(f"[GDB] Read memory failed: {e}")
@@ -140,7 +143,7 @@ class GDBController:
                 payload = parsed.get('payload')
 
                 # Если есть токен и коллбэк, разрешаем Future
-                if token and hasattr(self, 'callbacks') and token in self.callbacks:
+                if token and token in self.callbacks:
                     if msg_type == 'done':
                         self.callbacks[token].set_result(payload)
                     elif msg_type == 'error':

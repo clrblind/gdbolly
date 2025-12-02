@@ -15,8 +15,9 @@ export const normalizeAddress = (addr) => {
 export const offsetAddress = (addr, offset) => {
     try {
         const big = BigInt(addr);
-        const res = big + BigInt(offset);
-        if (res < 0n) return '0x0';
+        const off = BigInt(offset);
+        let res = big + off;
+        if (res < 0n) res = 0n;
         return '0x' + res.toString(16).toLowerCase();
     } catch(e) {
         return addr;

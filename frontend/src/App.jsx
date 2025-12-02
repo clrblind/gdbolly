@@ -37,8 +37,8 @@ function App() {
       <MainMenu 
         handleSessionLoad={handleSessionLoad} 
         setActiveModal={setActiveModal} 
-        toggleLogs={toggleLogs}
-        focusDisassembly={focusDisassembly}
+        toggleLogs={() => toggleLogs(true)}
+        focusDisassembly={() => toggleLogs(false)}
       />
 
       <MainToolbar 
@@ -46,36 +46,41 @@ function App() {
         handleStep={handleStep} 
         apiCall={apiCall} 
         toggleLogs={toggleLogs}
+        setActiveModal={setActiveModal}
       />
 
       <Workspace>
-        <HorizontalSplit style={{ height: `${layout.topHeightPercent}%` }}>
-          <Panel style={{ width: `${layout.leftWidthPercent}%` }}>
-            <DisassemblyPane onContextMenu={handleDisasmContextMenu} />
-            <InfoPane />
-          </Panel>
-          <VerticalResizer onMouseDown={handleMouseDownVert} />
-          <Panel style={{ flex: 1 }}>
-            <RegistersPane />
-          </Panel>
-        </HorizontalSplit>
+        {showSystemLog ? (
+            <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'absolute', top: 0, left: 0, zIndex: 50 }}>
+                <SystemLogWindow onClose={() => toggleLogs(false)} />
+            </div>
+        ) : (
+          /* CPU View */
+          <>
+            <HorizontalSplit style={{ height: `${layout.topHeightPercent}%` }}>
+              <Panel style={{ width: `${layout.leftWidthPercent}%` }}>
+                <DisassemblyPane onContextMenu={handleDisasmContextMenu} />
+                <InfoPane />
+              </Panel>
+              <VerticalResizer onMouseDown={handleMouseDownVert} />
+              <Panel style={{ flex: 1 }}>
+                <RegistersPane />
+              </Panel>
+            </HorizontalSplit>
 
-        <HorizontalResizer onMouseDown={handleMouseDownHorz} />
+            <HorizontalResizer onMouseDown={handleMouseDownHorz} />
 
-        <HorizontalSplit style={{ flex: 1 }}>
-          <Panel style={{ width: `${layout.leftWidthPercent}%` }}>
-             <div style={{padding: 5}}>Memory Dump (Pending...)</div>
-          </Panel>
-          <VerticalResizer onMouseDown={handleMouseDownVert} />
-          <Panel style={{ flex: 1 }}>
-             <div style={{padding: 5}}>Stack (Pending...)</div>
-          </Panel>
-        </HorizontalSplit>
-
-        {showSystemLog && (
-            <SystemLogWindow onClose={toggleLogs} />
+            <HorizontalSplit style={{ flex: 1 }}>
+              <Panel style={{ width: `${layout.leftWidthPercent}%` }}>
+                <div style={{padding: 5}}>Memory Dump (Pending...)</div>
+              </Panel>
+              <VerticalResizer onMouseDown={handleMouseDownVert} />
+              <Panel style={{ flex: 1 }}>
+                <div style={{padding: 5}}>Stack (Pending...)</div>
+              </Panel>
+            </HorizontalSplit>
+          </>
         )}
-
       </Workspace>
 
       <StatusBar>

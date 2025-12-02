@@ -4,17 +4,13 @@ import styled from 'styled-components';
 import { useSelector } from 'react-redux';
 
 const WinContainer = styled.div`
-  position: absolute;
-  top: 35px;
-  left: 20px;
-  right: 20px;
-  bottom: 30px;
+  width: 100%;
+  height: 100%;
   background: #fff;
-  border: 2px outset #fff;
-  z-index: 1000;
+  border: 2px inset #fff; /* Looks like a pane now */
   display: flex;
   flex-direction: column;
-  box-shadow: 4px 4px 10px rgba(0,0,0,0.3);
+  box-sizing: border-box;
 `;
 
 const WinHeader = styled.div`
@@ -29,6 +25,7 @@ const WinHeader = styled.div`
   font-size: 11px;
   font-weight: bold;
   cursor: default;
+  flex-shrink: 0;
 `;
 
 const CloseBtn = styled.button`
@@ -71,10 +68,8 @@ const Tr = styled.tr`
   background: ${props => props.$selected ? '#000080' : 'white'};
   color: ${props => props.$selected ? 'white' : 'black'};
   cursor: default;
-  &:hover {
-    border: 1px solid black; 
-    /* Simple hover effect, real logic depends on selection */
-  }
+  /* Use outline instead of border to prevent jitter */
+  outline: ${props => props.$hovered ? '1px dotted black' : 'none'};
 `;
 
 const Td = styled.td`
@@ -83,7 +78,24 @@ const Td = styled.td`
   overflow: hidden;
   text-overflow: ellipsis;
   border-right: 1px solid #eee;
+  border-bottom: 1px solid transparent; 
 `;
+
+const LogRow = ({ log, isSelected, onClick }) => {
+    const [hovered, setHovered] = useState(false);
+    return (
+        <Tr 
+            $selected={isSelected} 
+            $hovered={hovered && !isSelected}
+            onClick={onClick}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+        >
+            <Td style={{borderRight: '1px solid #ccc'}}>{log.timestamp}</Td>
+            <Td title={log.message} style={{color: log.type === 'error' ? 'red' : 'inherit'}}>{log.message}</Td>
+        </Tr>
+    );
+};
 
 const SystemLogWindow = ({ onClose }) => {
   const logs = useSelector(state => state.debug.systemLogs);
@@ -99,16 +111,23 @@ const SystemLogWindow = ({ onClose }) => {
   }, [logs, selectedId]);
 
   const handleKeyDown = (e) => {
+      // Close on Escape
+      if (e.key === 'Escape') {
+          e.preventDefault();
+          if (onClose) onClose();
+          return;
+      }
+
       if (logs.length === 0) return;
       const idx = logs.findIndex(l => l.id === selectedId);
       
       if (e.key === 'ArrowDown') {
           e.preventDefault();
-          const nextIdx = idx < logs.length - 1 ? idx + 1 : logs.length - 1;
+          const nextIdx = (idx === -1 || idx === logs.length - 1) ? logs.length - 1 : idx + 1;
           setSelectedId(logs[nextIdx].id);
       } else if (e.key === 'ArrowUp') {
           e.preventDefault();
-          const prevIdx = idx > 0 ? idx - 1 : 0;
+          const prevIdx = (idx === -1 || idx === 0) ? 0 : idx - 1;
           setSelectedId(logs[prevIdx].id);
       }
   };
@@ -129,14 +148,12 @@ const SystemLogWindow = ({ onClose }) => {
                 </thead>
                 <tbody>
                     {logs.map(log => (
-                        <Tr 
+                        <LogRow 
                             key={log.id} 
-                            $selected={selectedId === log.id}
+                            log={log}
+                            isSelected={selectedId === log.id}
                             onClick={() => setSelectedId(log.id)}
-                        >
-                            <Td>{log.timestamp}</Td>
-                            <Td title={log.message}>{log.message}</Td>
-                        </Tr>
+                        />
                     ))}
                     <tr ref={bottomRef}></tr>
                 </tbody>

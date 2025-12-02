@@ -1,6 +1,36 @@
 
 # Changelog
 
+## [0.0.7] - 2025-12-02
+### Changed
+- **Layout**: The "System Log" window now occupies the entire workspace (Full Screen), hiding the Disassembly, Registers, Dump, and Stack panels when active. This mimics the "Window" switching behavior of classic debuggers.
+- **Terminology**: Renamed the main view from "Disassembly" to "CPU" in menus and toolbars to reflect that it contains registers, stack, and dump as well.
+- **Goto (Ctrl+G)**: 
+    - Added support for register names. You can now type `rax`, `rip`, `ecx` etc., to jump to the address stored in that register.
+    - Improved address validation.
+- **Toolbar**: 
+    - Added a "CPU" button to quickly switch back to the main view.
+    - Fixed the "System Log" button functionality.
+
+### Fixed
+- **System Log**: Pressing `Escape` now correctly closes/hides the log window.
+- **Disassembly**: Fixed an issue where the listing buffer might display incorrect start addresses after a "Goto" operation.
+
+## [0.0.6] - 2025-12-02
+### Fixed
+- **Logging Consistency**: Unified log format across Backend and Frontend. All logs now include millisecond-precision timestamps (`HH:MM:SS.mmm`). Removed redundant prefixes.
+- **Patching Stability**: Fixed `Read memory timeout` errors by implementing unique UUID tokens for GDB memory requests. Increased GDB read timeout to 4s.
+- **Data Integrity**: Patch operations now strictly validate that original bytes are read successfully before writing new bytes or saving to DB.
+- **UI Layout**: System Log window now correctly occupies the top workspace pane (replacing Disassembly/Registers) instead of floating on top. Fixed row height jitter on hover.
+- **Navigation**: 
+    - Fixed `Num *` (Jump to RIP) not working due to address normalization issues.
+    - Fixed "Scroll Up" pre-fetching in Disassembly view using correct BigInt arithmetic for negative offsets.
+- **Hotkeys**: Added `Alt+C` to quickly switch back to Disassembly view from Log.
+
+### Added
+- **Detailed Logging**: User actions (Settings change, Comments, Patches, Reverts) are now verbosely logged to the System Log.
+- **Hex Formatting**: Byte arrays in logs are now displayed as `[0x90, 0x90]` instead of decimal.
+
 ## [0.0.5] - 2025-12-02
 ### Added
 - **Refactoring**: Split `useAppLogic` into granular hooks (`useSocket`, `useDebuggerControl`, `useMemory`, `useLayout`, `useAPI`).

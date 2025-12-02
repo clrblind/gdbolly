@@ -92,6 +92,7 @@ const DisassemblyPane = ({ onContextMenu }) => {
   const resizingRef = useRef(null);
   const [resizeTooltip, setResizeTooltip] = useState(null);
   const containerRef = useRef(null);
+  const isFetchingRef = useRef(false);
 
   // Drag selection state
   const isSelecting = useRef(false);
@@ -125,19 +126,25 @@ const DisassemblyPane = ({ onContextMenu }) => {
   };
 
   // Scroll Pre-fetching
+  useEffect(() => {
+    isFetchingRef.current = false;
+  }, [instructions]);
+
   const handleScroll = (e) => {
       const el = e.target;
-      if (el.scrollTop === 0 && instructions.length > 0) {
-          // Scrolled to top, try to fetch previous (~10 instructions back)
-          // Heuristic: -64 bytes
-          const prev = offsetAddress(instructions[0].address, -64);
+      if (isFetchingRef.current) return;
+      if (instructions.length === 0) return;
+
+      if (el.scrollTop < 10) {
+          // Scrolled to top, try to fetch previous
+          isFetchingRef.current = true;
+          const prev = offsetAddress(instructions[0].address, -64); // ~16 instructions
           dispatch(setViewStartAddress(prev));
-      } else if (el.scrollHeight - el.scrollTop === el.clientHeight && instructions.length > 0) {
-          // Scrolled to bottom, fetch next chunk starting from last instruction
-          // The ViewStart will effectively jump, this mimics paging.
-          // Real infinite scroll needs list merging which is complex, 
-          // for now we just jump view to continue reading.
-          const next = instructions[instructions.length - 1].address;
+      } else if (el.scrollHeight - el.scrollTop - el.clientHeight < 10) {
+          // Scrolled to bottom
+          isFetchingRef.current = true;
+          // Jump view start to the end to simulate paging down
+          const next = instructions[Math.max(0, instructions.length - 5)].address;
           dispatch(setViewStartAddress(next));
       }
   };

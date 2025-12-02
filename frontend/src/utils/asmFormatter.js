@@ -2,6 +2,13 @@
 // Helper regex string for registers
 export const REG_PATTERN = "eax|ebx|ecx|edx|esi|edi|esp|ebp|rax|rbx|rcx|rdx|rsi|rdi|rsp|rbp|r8|r9|r10|r11|r12|r13|r14|r15|rip|eip|al|ah|bl|bh|cl|ch|dl|dh|cs|ds|es|fs|gs|ss";
 
+// Map for Register ID/Number to Name, and vice-versa if needed.
+// GDB often sends register numbers.
+export const REG_NAMES = {
+    "0": "RAX", "1": "RBX", "2": "RCX", "3": "RDX", "4": "RSI", "5": "RDI", 
+    "6": "RBP", "7": "RSP", "16": "RIP", "17": "EFLAGS"
+};
+
 export const applyCase = (text, mode) => {
     return mode === 'upper' ? text.toUpperCase() : text.toLowerCase();
 };

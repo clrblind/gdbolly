@@ -105,7 +105,7 @@ const MainMenu = ({ handleSessionLoad, setActiveModal, toggleLogs, focusDisassem
         <MenuItemRoot>
             Window
             <MenuList>
-                <DropdownItem onClick={focusDisassembly}>Disassembly</DropdownItem>
+                <DropdownItem onClick={focusDisassembly}>CPU</DropdownItem>
                 <DropdownItem onClick={toggleLogs}>System Log</DropdownItem>
             </MenuList>
         </MenuItemRoot>
