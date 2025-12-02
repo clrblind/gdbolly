@@ -1,6 +1,17 @@
 
 # Changelog
 
+## [0.0.8] - 2025-12-02
+### Security & Stability
+- **GDB Controller**: Fixed a critical deadlock where the GDB process would freeze if too much data was written to `stderr`. Now `stderr` is redirected to `stdout`.
+- **Backend**: Replaced potentially unsafe `os.system` calls with `asyncio.create_subprocess_exec` to prevent command injection vulnerabilities.
+- **Startup**: Migrated from deprecated `@app.on_event("startup")` to the modern `lifespan` context manager mechanism in FastAPI.
+
+### Fixed
+- **Patching Algorithm**: 
+    - Completely rewrote the memory writing logic. Replaced the unstable `set {array} = ...` syntax with the standard GDB MI command `-data-write-memory-bytes`.
+    - Added **Token-based synchronization** for writes. The backend now waits for GDB to confirm the write operation (`^done`) before updating the database or responding to the frontend. This fixes the "non-working state" of binary patching and ensures atomic updates.
+
 ## [0.0.7] - 2025-12-02
 ### Changed
 - **Layout**: The "System Log" window now occupies the entire workspace (Full Screen), hiding the Disassembly, Registers, Dump, and Stack panels when active. This mimics the "Window" switching behavior of classic debuggers.

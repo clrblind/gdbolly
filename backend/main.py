@@ -1,6 +1,7 @@
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from gdb_controller import gdb
 from db_manager import DBManager
 from settings_manager import SettingsManager
@@ -8,7 +9,19 @@ import asyncio
 import hashlib
 import os
 
-app = FastAPI()
+# Global Managers
+db_manager = None
+settings_manager = SettingsManager()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    await settings_manager.init_db()
+    yield
+    # Shutdown logic if needed (e.g. gdb.stop())
+    await gdb.stop()
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,10 +29,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Global Managers
-db_manager = None
-settings_manager = SettingsManager()
 
 async def broadcast_log(msg: str):
     # Frontend handles timestamps and formatting, just send raw message
@@ -29,10 +38,6 @@ def bytes_to_hex_str(bytes_list):
     """[144, 144] -> [0x90, 0x90]"""
     if not bytes_list: return "[]"
     return "[" + ", ".join([f"0x{b:02x}" for b in bytes_list]) + "]"
-
-@app.on_event("startup")
-async def startup_event():
-    await settings_manager.init_db()
 
 @app.get("/settings")
 async def get_settings():
@@ -54,9 +59,26 @@ async def load_binary(path: str = "/targets/hello"):
     
     await gdb.stop()
     
+    # Fix: Secure compilation without shell injection
     if not os.path.exists(path) and os.path.exists(path + ".c"):
         await broadcast_log(f"Compiling {path}.c ...")
-        os.system(f"gcc -g {path}.c -o {path}")
+        try:
+            # -g for debug info
+            process = await asyncio.create_subprocess_exec(
+                "gcc", "-g", f"{path}.c", "-o", path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            if process.returncode != 0:
+                error_msg = stderr.decode()
+                await broadcast_log(f"Compilation Failed: {error_msg}")
+                return {"error": "Compilation failed", "details": error_msg}
+            
+            await broadcast_log("Compilation successful.")
+        except Exception as e:
+            await broadcast_log(f"Compilation Error: {str(e)}")
+            return {"error": str(e)}
     
     try:
         with open(path, "rb") as f:
@@ -139,6 +161,7 @@ async def write_memory(payload: dict = Body(...)):
     await broadcast_log(f"Request write at {address}: {bytes_to_hex_str(new_bytes)}")
 
     # 1. Read original bytes (Wait for reliable response)
+    # Using existing read_memory which uses tokens
     orig_bytes = await gdb.read_memory(address, len(new_bytes))
     
     if not orig_bytes:
@@ -149,7 +172,13 @@ async def write_memory(payload: dict = Body(...)):
     await broadcast_log(f"Original bytes at {address}: {bytes_to_hex_str(orig_bytes)}")
     
     # 2. Write new bytes
-    await gdb.write_memory(address, new_bytes)
+    # FIX: Now awaits for actual GDB confirmation via token
+    success = await gdb.write_memory(address, new_bytes)
+    
+    if not success:
+        msg = f"Failed to write memory at {address}."
+        await broadcast_log(msg)
+        return {"error": msg}
     
     # 3. Save to DB
     if db_manager:
@@ -175,8 +204,11 @@ async def revert_memory(payload: dict = Body(...)):
     orig_bytes = [int(orig_str[i:i+2], 16) for i in range(0, len(orig_str), 2)]
     
     await broadcast_log(f"Reverting {address} to {bytes_to_hex_str(orig_bytes)}")
-    await gdb.write_memory(address, orig_bytes)
     
+    success = await gdb.write_memory(address, orig_bytes)
+    if not success:
+        return {"error": "Failed to revert memory write"}
+
     # 3. Delete from DB
     await db_manager.delete_patch(address)
     

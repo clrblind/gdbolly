@@ -20,11 +20,12 @@ class GDBController:
             return
 
         # Запускаем новый процесс
+        # FIX: stderr перенаправлен в stdout, чтобы избежать дедлока при переполнении буфера stderr
         self.process = await asyncio.create_subprocess_exec(
             'gdb', '--interpreter=mi3', '--args', binary_path,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.STDOUT 
         )
         
         print(f"[GDB] Started for {binary_path}")
@@ -106,24 +107,38 @@ class GDBController:
             if token in self.callbacks:
                 del self.callbacks[token]
 
-    async def write_memory(self, address: str, bytes_list: list):
-        """Writes bytes to memory using GDB set command"""
-        if not bytes_list: 
-            return
+    async def write_memory(self, address: str, bytes_list: list) -> bool:
+        """Writes bytes to memory using GDB MI command. Returns True on success."""
+        if not bytes_list or not self.process: 
+            return False
 
-        clean_bytes = []
-        for b in bytes_list:
-            if b is None: continue 
-            clean_bytes.append(b)
-            
-        if not clean_bytes:
-            return
+        # Prepare hex string for -data-write-memory-bytes
+        hex_data = "".join([f"{b:02x}" for b in bytes_list if b is not None])
+        if not hex_data:
+            return False
+
+        token = str(uuid.uuid4().hex)
+        future = asyncio.get_event_loop().create_future()
+        self.callbacks[token] = future
+
+        # Command: -data-write-memory-bytes [ -o OFFSET ] ADDRESS CONTENTS
+        # CONTENTS is hex string
+        cmd = f"{token}-data-write-memory-bytes {address} {hex_data}"
         
-        # Construct array string: {0x90, 0x90}
-        bytes_str = ", ".join([f"{b:#04x}" for b in clean_bytes])
-        cmd = f"set {{unsigned char[{len(clean_bytes)}]}}{address} = {{{bytes_str}}}"
-        
-        await self.send_command(cmd)
+        try:
+            await self.send_command(cmd)
+            # Wait for ^done
+            await asyncio.wait_for(future, timeout=2.0)
+            return True
+        except asyncio.TimeoutError:
+            print(f"[GDB] Write memory timeout for {address}")
+            return False
+        except Exception as e:
+            print(f"[GDB] Write memory failed: {e}")
+            return False
+        finally:
+            if token in self.callbacks:
+                del self.callbacks[token]
 
     async def _read_stdout(self, process_instance):
         try:
@@ -132,7 +147,7 @@ class GDBController:
                 if not line:
                     break
                 
-                decoded = line.decode().strip()
+                decoded = line.decode('utf-8', errors='replace').strip()
                 parsed = parse_response(decoded)
                 
                 if not parsed:
