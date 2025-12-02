@@ -72,7 +72,7 @@ const Arrow = styled.span`
   font-size: 9px;
 `;
 
-const MainMenu = ({ handleSessionLoad, setActiveModal }) => {
+const MainMenu = ({ handleSessionLoad, setActiveModal, toggleLogs, focusDisassembly }) => {
   return (
     <Bar>
         <MenuItemRoot>
@@ -105,7 +105,8 @@ const MainMenu = ({ handleSessionLoad, setActiveModal }) => {
         <MenuItemRoot>
             Window
             <MenuList>
-                <DropdownItem onClick={() => setActiveModal('logs')}>System Log</DropdownItem>
+                <DropdownItem onClick={focusDisassembly}>Disassembly</DropdownItem>
+                <DropdownItem onClick={toggleLogs}>System Log</DropdownItem>
             </MenuList>
         </MenuItemRoot>
         <MenuItemRoot>Help</MenuItemRoot>

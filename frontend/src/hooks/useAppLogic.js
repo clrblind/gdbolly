@@ -1,7 +1,7 @@
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateSettings, setViewStartAddress } from '../store/debuggerSlice';
+import { updateSettings, setViewStartAddress, toggleSystemLogWindow } from '../store/debuggerSlice';
 import { useAPI } from './useAPI';
 import { useSocket } from './useSocket';
 import { useLayout } from './useLayout';
@@ -14,13 +14,13 @@ export const useAppLogic = () => {
   
   // Initialize Global Logic
   const { apiCall } = useAPI();
-  useSocket(); // Hooks up listeners
+  useSocket(); 
   
-  // Selectors needed for App.jsx
+  // Selectors
   const status = useSelector(state => state.debug.status);
   const settings = useSelector(state => state.debug.settings);
   const selectedAddresses = useSelector(state => state.debug.selectedAddresses);
-  const systemLogs = useSelector(state => state.debug.systemLogs);
+  const showSystemLog = useSelector(state => state.debug.showSystemLog);
   const currentThreadId = useSelector(state => state.debug.currentThreadId);
   const disassembly = useSelector(state => state.debug.disassembly);
   const registers = useSelector(state => state.debug.registers);
@@ -29,17 +29,15 @@ export const useAppLogic = () => {
   // Layout
   const { layout, handleMouseDownHorz, handleMouseDownVert } = useLayout();
   
-  // Shared State for Modals (lifted up)
-  // We need `setActiveModal` to be passed to both Control and Memory hooks
-  // So we manage it here or passed down. To avoid circular deps, we use a simple useState here.
-  const [activeModal, setActiveModal] = React_useState(null);
+  // Shared State for Modals
+  const [activeModal, setActiveModal] = useState(null);
 
-  // Debugger Control (Stepping, Running)
+  // Debugger Control
   const { 
       handleStep, handleGoTo, getCurrentIP 
   } = useDebuggerControl(apiCall, setActiveModal);
 
-  // Memory Control (Disasm, Patching, Comments)
+  // Memory Control
   const {
       contextMenu, setContextMenu,
       commentInput, setCommentInput,
@@ -54,6 +52,16 @@ export const useAppLogic = () => {
       handleFillOk,
       handleDisasmContextMenu
   } = useMemory(apiCall, setActiveModal, getCurrentIP);
+
+  // Helper
+  const toggleLogs = () => dispatch(toggleSystemLogWindow());
+  const focusDisassembly = () => {
+      // Just ensure logs are closed or we just mean visual focus
+      // If we had Z-index manager, we would lift it.
+      // For now, if logs are covering, close them?
+      // Or we can just set focus to the element (done in DisassemblyPane ref).
+      if (showSystemLog) dispatch(toggleSystemLogWindow(false));
+  };
 
   // Settings Persistence
   const saveSetting = (key, value) => {
@@ -98,7 +106,7 @@ export const useAppLogic = () => {
 
   return {
     // State
-    status, settings, selectedAddresses, systemLogs,
+    status, settings, selectedAddresses, showSystemLog,
     currentThreadId, layout, contextMenu, activeModal,
     commentInput, patchInput, fillByte, fillInputRef,
     
@@ -109,12 +117,10 @@ export const useAppLogic = () => {
     handleSessionLoad, handleResetDB, handleStep, handleGoTo,
     handleEditOk, handleFillOk, handleCommentOk,
     handleMouseDownHorz, handleMouseDownVert, handleDisasmContextMenu,
+    toggleLogs, focusDisassembly,
     
     apiCall,
     saveSetting,
     dispatch
   };
 };
-
-// Quick fix for the missing import in the extracted code block above
-import { useState as React_useState } from 'react';

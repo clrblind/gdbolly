@@ -8,9 +8,15 @@ export const useAPI = () => {
     const dispatch = useDispatch();
 
     const apiCall = async (endpoint, body = null, method = 'POST', log = true) => {
+        const now = new Date();
+        const ts = now.toLocaleTimeString('en-GB') + '.' + now.getMilliseconds().toString().padStart(3, '0');
+
         if (log && method !== 'GET') {
-            const ts = new Date().toLocaleTimeString();
-            dispatch(addSystemLog(`[${ts}] REQ: ${endpoint} ${body ? JSON.stringify(body) : ''}`));
+            dispatch(addSystemLog({ 
+                timestamp: ts, 
+                message: `REQ: ${endpoint} ${body ? JSON.stringify(body) : ''}`,
+                type: 'info'
+            }));
         }
         try {
             const opts = { method: method };
@@ -20,14 +26,27 @@ export const useAPI = () => {
             }
             const res = await fetch(`${API_URL}${endpoint}`, opts);
             const json = await res.json();
+            
             if (log && method !== 'GET') {
-                const ts = new Date().toLocaleTimeString();
-                dispatch(addSystemLog(`[${ts}] RES: ${JSON.stringify(json)}`));
+                const nowRes = new Date();
+                const tsRes = nowRes.toLocaleTimeString('en-GB') + '.' + nowRes.getMilliseconds().toString().padStart(3, '0');
+                
+                dispatch(addSystemLog({
+                    timestamp: tsRes,
+                    message: `RES: ${JSON.stringify(json)}`,
+                    type: 'info'
+                }));
             }
             return json;
         } catch(e) { 
             console.error(e); 
-            if (log) dispatch(addSystemLog(`[ERR] ${e.message}`));
+            if (log) {
+                dispatch(addSystemLog({
+                    timestamp: ts,
+                    message: `[ERR] ${e.message}`,
+                    type: 'error'
+                }));
+            }
             return null; 
         }
     };

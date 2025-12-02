@@ -24,6 +24,11 @@ settings_manager = SettingsManager()
 async def broadcast_log(msg: str):
     await gdb.msg_queue.put({"type": "system_log", "payload": msg})
 
+def bytes_to_hex_str(bytes_list):
+    """[144, 144] -> [0x90, 0x90]"""
+    if not bytes_list: return "[]"
+    return "[" + ", ".join([f"0x{b:02x}" for b in bytes_list]) + "]"
+
 @app.on_event("startup")
 async def startup_event():
     await settings_manager.init_db()
@@ -46,7 +51,6 @@ async def load_binary(path: str = "/targets/hello"):
     global db_manager
     await broadcast_log(f"Session Load Request: {path}")
     
-    # Ensure previous GDB is dead
     await gdb.stop()
     
     if not os.path.exists(path) and os.path.exists(path + ".c"):
@@ -113,13 +117,9 @@ async def get_disassembly(payload: dict = Body(...)):
         return {"error": "Missing start address"}
 
     try:
-        # GDB requires end address. Heuristic: 8 bytes per instr.
         start_int = int(start, 16)
         end_int = start_int + (count * 8) 
         end_hex = hex(end_int)
-        
-        # If user requests code "above", they might send a start address
-        # but the frontend usually handles the math.
         
         cmd = f"-data-disassemble -s {start} -e {end_hex} -- 2"
         await gdb.send_command(cmd)
@@ -135,17 +135,25 @@ async def write_memory(payload: dict = Body(...)):
     if not address or new_bytes is None:
         return {"error": "Invalid parameters"}
     
-    await broadcast_log(f"Writing memory at {address}: {new_bytes}")
+    await broadcast_log(f"Request write at {address}: {bytes_to_hex_str(new_bytes)}")
 
     # 1. Read original bytes
+    # IMPORTANT: We must wait for this. If it returns empty, it means GDB failed to read memory 
+    # (maybe process not running or bad address). We MUST NOT proceed to write.
     orig_bytes = await gdb.read_memory(address, len(new_bytes))
-    await broadcast_log(f"Read original bytes: {orig_bytes}")
+    
+    if not orig_bytes:
+        msg = f"Failed to read original bytes at {address}. Aborting write."
+        await broadcast_log(msg)
+        return {"error": msg}
+
+    await broadcast_log(f"Original bytes at {address}: {bytes_to_hex_str(orig_bytes)}")
     
     # 2. Write new bytes
     await gdb.write_memory(address, new_bytes)
     
     # 3. Save to DB
-    if db_manager and orig_bytes:
+    if db_manager:
         await db_manager.save_patch(address, orig_bytes, new_bytes)
         await broadcast_log(f"Patch saved to DB")
 
@@ -160,13 +168,14 @@ async def revert_memory(payload: dict = Body(...)):
     # 1. Get patch info
     patch = await db_manager.get_patch(address)
     if not patch:
+        await broadcast_log(f"Revert failed: No patch found for {address}")
         return {"error": "No patch found"}
     
     # 2. Restore bytes
     orig_str = patch['orig_bytes']
     orig_bytes = [int(orig_str[i:i+2], 16) for i in range(0, len(orig_str), 2)]
     
-    await broadcast_log(f"Reverting {address} to {orig_bytes}")
+    await broadcast_log(f"Reverting {address} to {bytes_to_hex_str(orig_bytes)}")
     await gdb.write_memory(address, orig_bytes)
     
     # 3. Delete from DB

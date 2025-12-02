@@ -1,12 +1,11 @@
 
 import React from 'react';
 import XPModal from './XPModal';
-import DebuggerWindow from './DebuggerWindow';
 import GotoModal from './GotoModal';
 
 const ModalManager = ({ 
     activeModal, setActiveModal, 
-    settings, systemLogs, selectedAddresses,
+    settings, selectedAddresses,
     commentInput, setCommentInput, handleCommentOk,
     patchInput, setPatchInput, handleEditOk,
     fillByte, setFillByte, handleFillOk, fillInputRef,
@@ -17,12 +16,6 @@ const ModalManager = ({
 
   return (
     <>
-      {activeModal === 'logs' && (
-          <DebuggerWindow title="System Log" onClose={() => setActiveModal(null)}>
-              {systemLogs.map((log, i) => <div key={i}>{log}</div>)}
-          </DebuggerWindow>
-      )}
-
       {activeModal === 'options' && (
           <XPModal title="Options" onClose={() => setActiveModal(null)} onOk={() => setActiveModal(null)}>
               <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>

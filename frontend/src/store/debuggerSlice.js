@@ -7,7 +7,12 @@ const initialState = {
   currentThreadId: null,
   registers: [],
   disassembly: [],
+  
+  // Array of objects { id, timestamp, message, type }
   systemLogs: [],
+  
+  // Windows Management
+  showSystemLog: false,
   
   // View Control
   viewStartAddress: null,
@@ -43,7 +48,6 @@ export const debuggerSlice = createSlice({
   initialState,
   reducers: {
     resetDebuggerState: (state) => {
-        // Preserve settings and logs, clear session data
         state.status = 'IDLE';
         state.currentThreadId = null;
         state.registers = [];
@@ -75,11 +79,21 @@ export const debuggerSlice = createSlice({
       }
     },
     addSystemLog: (state, action) => {
-      if (state.systemLogs.length > 1000) state.systemLogs.shift();
-      state.systemLogs.push(action.payload);
+      // payload is expected to be object { timestamp, message, type }
+      if (state.systemLogs.length > 2000) state.systemLogs.shift();
+      const entry = {
+          id: Date.now() + Math.random(),
+          timestamp: action.payload.timestamp || new Date().toLocaleTimeString(),
+          message: action.payload.message || action.payload, // fallback for string
+          type: action.payload.type || 'info'
+      };
+      state.systemLogs.push(entry);
     },
     clearSystemLogs: (state) => {
       state.systemLogs = [];
+    },
+    toggleSystemLogWindow: (state, action) => {
+        state.showSystemLog = action.payload !== undefined ? action.payload : !state.showSystemLog;
     },
     
     // View & History
@@ -182,7 +196,8 @@ export const debuggerSlice = createSlice({
 
 export const { 
   resetDebuggerState,
-  setStatus, setThreadId, updateRegisters, updateDisassembly, addSystemLog, clearSystemLogs,
+  setStatus, setThreadId, updateRegisters, updateDisassembly, 
+  addSystemLog, clearSystemLogs, toggleSystemLogWindow,
   selectAddress, toggleAddressSelection, selectAddressRange, 
   setUserComment, setComments, updateSettings,
   setViewStartAddress, pushHistory, navigateBack, navigateForward, clearHistory,

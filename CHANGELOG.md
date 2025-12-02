@@ -10,6 +10,21 @@
     - **Num ***: Jump to current RIP/EIP.
 - **Scrolling**: Added pre-fetching logic to Disassembly view to load code before/after the current view when scrolling.
 - **State Reset**: `Reload Binary` and `Remove DB` now correctly clear all frontend state (red lines, history, registers).
+- **System Log**:
+    - Renamed "Debugger Log" to "System Log".
+    - Implemented table layout with Timestamp and Message columns.
+    - Added keyboard navigation (Up/Down) and row selection.
+    - Added millisecond precision to timestamps.
+    - Logs are now structured objects.
+- **Patching Reliability**: 
+    - Frontend now waits for backend confirmation before coloring lines red.
+    - Backend validates "Read Original Bytes" before writing new patch. Prevents corrupting the Revert database.
+    - Logging of byte arrays is now in HEX format.
+
+### Changed
+- **UI**: System Log window is now a persistent overlay with Z-index management.
+- **Menu**: Added "Window -> Disassembly" to bring main view to focus.
+- **Bugfix**: Fixed optimistic UI updates where failed Revert operations would still remove red highlighting.
 
 ## [0.0.4] - 2025-12-02
 ### Added

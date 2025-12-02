@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
     markAddressModified, removePatch, setComments, setPatches, 
-    setUserComment, resetDebuggerState, clearHistory, clearSystemLogs 
+    setUserComment, resetDebuggerState, addSystemLog
 } from '../store/debuggerSlice';
 import { parseInstruction } from '../utils/asmFormatter';
 import { normalizeAddress, offsetAddress } from '../utils/addressUtils';
@@ -52,8 +52,13 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         if (toRevert.length === 0) return;
         
         for (let addr of toRevert) {
-            await apiCall('/memory/revert', { address: addr });
-            dispatch(removePatch(addr));
+            const res = await apiCall('/memory/revert', { address: addr });
+            // Strict check: Only update state if backend confirmed
+            if (res && res.status === 'reverted') {
+                dispatch(removePatch(addr));
+            } else {
+                // If failed, log (apiCall already logs error to SystemLog)
+            }
         }
         refreshDisassembly(viewStartAddress);
     };
@@ -85,7 +90,6 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
 
     const performPatch = async (bytes) => {
         const patches = [];
-        let totalModified = [];
         disassembly.forEach(d => {
             if (selectedAddresses.includes(d.address)) {
                 const len = d.opcodes ? d.opcodes.split(' ').filter(x=>x).length : 1;
@@ -93,31 +97,44 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
             }
         });
         
+        let successCount = 0;
+        let totalModified = [];
+
         for (let p of patches) {
             let payloadBytes = [];
             if (bytes === 'NOP') {
                  payloadBytes = Array(p.len).fill(0x90);
             } else {
-                 const b = parseInt(bytes, 16);
-                 if (isNaN(b)) continue;
-                 payloadBytes = Array(p.len).fill(b);
+                 if (Array.isArray(bytes)) {
+                    // Fill with array logic or edit
+                    // If bytes is single value array (fill with byte), use it
+                    if (bytes.length === 1 && patches.length > 1) {
+                         payloadBytes = Array(p.len).fill(bytes[0]);
+                    } else if (p.address === selectedAddresses[0]) {
+                        payloadBytes = bytes;
+                    } else continue;
+                 } else {
+                     continue; 
+                 }
             }
             
-            if (Array.isArray(bytes)) {
-                if (p.address === selectedAddresses[0]) payloadBytes = bytes;
-                else continue; 
-            }
             if (payloadBytes.length > 0) {
-                await apiCall('/memory/write', { address: p.address, bytes: payloadBytes });
-                // Calculate modified addresses byte by byte
-                // p.address is string hex
-                for(let i=0; i<payloadBytes.length; i++) {
-                    totalModified.push(offsetAddress(p.address, i));
+                const res = await apiCall('/memory/write', { address: p.address, bytes: payloadBytes });
+                
+                if (res && res.status === 'written') {
+                    successCount++;
+                    for(let i=0; i<payloadBytes.length; i++) {
+                        totalModified.push(offsetAddress(p.address, i));
+                    }
                 }
             }
         }
-        if (totalModified.length > 0) dispatch(markAddressModified(totalModified));
-        refreshDisassembly(viewStartAddress);
+        
+        if (totalModified.length > 0) {
+             dispatch(markAddressModified(totalModified));
+             refreshDisassembly(viewStartAddress);
+        }
+        
         setActiveModal(null);
     };
 
@@ -174,7 +191,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         else if (type === 'offset') {
              textToCopy = processedLines.map(i => {
                  const addr = BigInt(i.address);
-                 const offset = addr & 0xFFFFFFn; // Simple masking for prototype
+                 const offset = addr & 0xFFFFFFn; 
                  return '0x' + offset.toString(16);
              }).join('\n');
         } else if (type === 'hex') {

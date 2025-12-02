@@ -14,11 +14,12 @@ import RegistersPane from './components/RegistersPane';
 import DisassemblyPane from './components/DisassemblyPane';
 import InfoPane from './components/InfoPane';
 import ContextMenu from './components/ContextMenu';
+import SystemLogWindow from './components/SystemLogWindow';
 
 function App() {
   const {
     // State
-    status, settings, selectedAddresses, systemLogs,
+    status, settings, selectedAddresses, showSystemLog,
     currentThreadId, layout, contextMenu, activeModal,
     commentInput, patchInput, fillByte, fillInputRef,
     
@@ -27,6 +28,7 @@ function App() {
     handleSessionLoad, handleResetDB, handleStep, handleGoTo,
     handleEditOk, handleFillOk, handleCommentOk,
     handleMouseDownHorz, handleMouseDownVert, handleDisasmContextMenu,
+    toggleLogs, focusDisassembly,
     apiCall, saveSetting, dispatch
   } = useAppLogic();
 
@@ -35,13 +37,15 @@ function App() {
       <MainMenu 
         handleSessionLoad={handleSessionLoad} 
         setActiveModal={setActiveModal} 
+        toggleLogs={toggleLogs}
+        focusDisassembly={focusDisassembly}
       />
 
       <MainToolbar 
         handleSessionLoad={handleSessionLoad} 
         handleStep={handleStep} 
         apiCall={apiCall} 
-        setActiveModal={setActiveModal} 
+        toggleLogs={toggleLogs}
       />
 
       <Workspace>
@@ -67,6 +71,11 @@ function App() {
              <div style={{padding: 5}}>Stack (Pending...)</div>
           </Panel>
         </HorizontalSplit>
+
+        {showSystemLog && (
+            <SystemLogWindow onClose={toggleLogs} />
+        )}
+
       </Workspace>
 
       <StatusBar>
@@ -88,7 +97,6 @@ function App() {
         activeModal={activeModal}
         setActiveModal={setActiveModal}
         settings={settings}
-        systemLogs={systemLogs}
         selectedAddresses={selectedAddresses}
         commentInput={commentInput}
         setCommentInput={setCommentInput}
