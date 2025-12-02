@@ -5,7 +5,8 @@ import {
   setThreadId, setUserComment, updateSettings,
   setThreadId as setThreadIdAction,
   navigateBack, navigateForward, markAddressModified,
-  setViewStartAddress
+  setViewStartAddress, setComments, setPatches, removePatch,
+  addSystemLog
 } from './store/debuggerSlice';
 import { 
   MainContainer, Toolbar, MenuBar, MenuItem, StatusBar,
@@ -34,6 +35,8 @@ function App() {
   const currentThreadId = useSelector(state => state.debug.currentThreadId);
   const registers = useSelector(state => state.debug.registers);
   const viewStartAddress = useSelector(state => state.debug.viewStartAddress);
+  const modifiedAddresses = useSelector(state => state.debug.modifiedAddresses);
+  const systemLogs = useSelector(state => state.debug.systemLogs);
 
   // Layout State
   const [topHeightPercent, setTopHeightPercent] = useState(65);
@@ -56,13 +59,57 @@ function App() {
       const r = registers.find(r => r.number === '16' || r.number === 'rip' || r.number === 'eip');
       return r ? r.value : null;
   };
+  
+  const apiCall = async (endpoint, body = null, log = true) => {
+    if (log) {
+        const ts = new Date().toLocaleTimeString();
+        dispatch(addSystemLog(`[${ts}] REQ: ${endpoint} ${body ? JSON.stringify(body) : ''}`));
+    }
+    try {
+        const opts = { method: 'POST' };
+        if (body) {
+            opts.headers = { 'Content-Type': 'application/json' };
+            opts.body = JSON.stringify(body);
+        }
+        const res = await fetch(`${API_URL}${endpoint}`, opts);
+        const json = await res.json();
+        if (log) {
+            const ts = new Date().toLocaleTimeString();
+            dispatch(addSystemLog(`[${ts}] RES: ${JSON.stringify(json)}`));
+        }
+        return json;
+    } catch(e) { 
+        console.error(e); 
+        if (log) dispatch(addSystemLog(`[ERR] ${e.message}`));
+        return null; 
+    }
+  };
 
   const refreshDisassembly = (addr) => {
       // If addr provided, fetch around it. If not, fetch around IP.
       const target = addr || getCurrentIP();
       if (target) {
-          fetch(`${API_URL}/memory/disassemble?start=${target}&count=100`, { method: 'POST' });
+          apiCall('/memory/disassemble', { start: target, count: 100 }, false);
       }
+  };
+
+  const handleSessionLoad = async () => {
+      const data = await apiCall('/session/load');
+      if (data) {
+          if (data.comments) dispatch(setComments(data.comments));
+          if (data.patches) dispatch(setPatches(data.patches));
+      }
+  };
+
+  const handleRevert = async () => {
+      const toRevert = selectedAddresses.filter(addr => modifiedAddresses.includes(addr));
+      if (toRevert.length === 0) return;
+      
+      for (let addr of toRevert) {
+          await apiCall('/memory/revert', { address: addr });
+          dispatch(removePatch(addr));
+      }
+      refreshDisassembly(viewStartAddress);
   };
 
   // --- Effects ---
@@ -70,6 +117,13 @@ function App() {
   // Global Key Handler
   useEffect(() => {
     const handleKeyDown = (e) => {
+        // Alt+Backspace: Revert
+        if (e.altKey && e.key === 'Backspace') {
+            e.preventDefault();
+            handleRevert();
+            return;
+        }
+
         if (e.key === ';') {
             if (selectedAddresses.length > 0) {
                 e.preventDefault();
@@ -90,7 +144,7 @@ function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedAddresses, userComments]);
+  }, [selectedAddresses, userComments, modifiedAddresses, viewStartAddress]);
 
   // View Start Change Effect
   useEffect(() => {
@@ -124,13 +178,12 @@ function App() {
     };
   }, [dispatch]);
 
-  // Stabilize View Logic (Effect on Registers/Disassembly change)
+  // Stabilize View Logic
   useEffect(() => {
       if (status !== 'PAUSED') return;
       const ip = getCurrentIP();
       if (!ip) return;
       
-      // Check if IP is in list
       const inView = disassembly.some(i => BigInt(i.address) === BigInt(ip));
       if (!inView && disassembly.length > 0) {
           dispatch(setViewStartAddress(ip));
@@ -138,18 +191,6 @@ function App() {
           dispatch(setViewStartAddress(ip));
       }
   }, [registers, status]);
-
-
-  const apiCall = async (endpoint, body = null) => {
-    try {
-        const opts = { method: 'POST' };
-        if (body) {
-            opts.headers = { 'Content-Type': 'application/json' };
-            opts.body = JSON.stringify(body);
-        }
-        await fetch(`${API_URL}${endpoint}`, opts);
-    } catch(e) { console.error(e); }
-  };
 
   const openCommentModal = () => {
       const firstAddr = selectedAddresses[0];
@@ -171,7 +212,6 @@ function App() {
       if (navigator.clipboard && window.isSecureContext) {
           navigator.clipboard.writeText(text);
       } else {
-          // Fallback
           const textArea = document.createElement("textarea");
           textArea.value = text;
           textArea.style.position = "fixed";
@@ -191,15 +231,13 @@ function App() {
   const performCopy = (type, subFormat = null) => {
       let targets = selectedAddresses;
       if (targets.length === 0 && disassembly.length > 0) {
-          targets = [disassembly[0].address]; // Default EIP/Top
+          targets = [disassembly[0].address]; 
       }
 
       const lines = disassembly.filter(i => targets.includes(i.address));
-      
       let textToCopy = "";
 
       if (type === 'line') {
-          // Use Tab as separator
           textToCopy = lines.map(i => `${i.address}\t${i.opcodes || ''}\t${i.inst}`).join('\n');
       } else if (type === 'address') {
           textToCopy = lines.map(i => i.address).join('\n');
@@ -216,7 +254,7 @@ function App() {
               if (format === 'prefix') return bytes.map(b => `0x${b}`).join(' ');
               if (format === 'python') return bytes.map(b => `\\x${b}`).join('');
               return hex;
-          }).join('\n');
+          }).join(''); // Joined without newlines for hex dump
       }
 
       handleCopy(textToCopy);
@@ -236,7 +274,6 @@ function App() {
           if (bytes === 'NOP') {
                payloadBytes = Array(p.len).fill(0x90);
           } else {
-               // Validate single byte fill
                const b = parseInt(bytes, 16);
                if (isNaN(b)) continue;
                payloadBytes = Array(p.len).fill(b);
@@ -272,6 +309,15 @@ function App() {
       if (bytes.length > 0) {
         performPatch(bytes);
       }
+  };
+
+  const handleCommentOk = async () => {
+      // Save to backend
+      for (const addr of selectedAddresses) {
+          await apiCall('/session/comment', { address: addr, comment: commentInput });
+          dispatch(setUserComment({ address: addr, comment: commentInput }));
+      }
+      setActiveModal(null);
   };
 
   // --- Resizing Logic ---
@@ -319,7 +365,8 @@ function App() {
                   separator: true,
                   submenu: [
                       { label: "Fill with NOPs", action: () => performPatch('NOP') },
-                      { label: "Fill with...", action: () => setActiveModal('fill') }
+                      { label: "Fill with...", action: () => setActiveModal('fill') },
+                      { label: "Revert", hotkey: "Alt+Back", action: handleRevert }
                   ]
               },
               { label: 'Comment', hotkey: ';', action: openCommentModal },
@@ -339,13 +386,6 @@ function App() {
       });
   };
 
-  const handleCommentOk = () => {
-      selectedAddresses.forEach(addr => {
-         dispatch(setUserComment({ address: addr, comment: commentInput }));
-      });
-      setActiveModal(null);
-  };
-
   return (
     <MainContainer>
       <MenuBar>
@@ -354,16 +394,17 @@ function App() {
         <MenuItem>Debug</MenuItem>
         <MenuItem>Plugins</MenuItem>
         <MenuItem onClick={() => setActiveModal('options')}>Options</MenuItem>
-        <MenuItem>Window</MenuItem>
+        <MenuItem onClick={() => setActiveModal('logs')}>Window</MenuItem>
         <MenuItem>Help</MenuItem>
       </MenuBar>
 
       <Toolbar>
-        <button onClick={() => apiCall('/session/load')} title="Reload binary">⏮</button>
+        <button onClick={handleSessionLoad} title="Reload binary">⏮</button>
         <button onClick={() => apiCall('/control/step_into')} title="Step Into (F7)">Step Into</button>
         <button onClick={() => apiCall('/control/step_over')} title="Step Over (F8)">Step Over</button>
         <button onClick={() => apiCall('/control/run')} title="Run (F9)">Run</button>
         <button title="Pause (F12)">Pause</button>
+        <button onClick={() => setActiveModal('logs')}>System Log</button>
       </Toolbar>
 
       <Workspace>
@@ -453,6 +494,26 @@ function App() {
                           <option value="python">Python (\xAA)</option>
                       </select>
                   </label>
+                  <label>Number Format: 
+                      <select 
+                        value={settings.numberFormat}
+                        onChange={(e) => dispatch(updateSettings({numberFormat: e.target.value}))}
+                      >
+                          <option value="auto">Auto ($0xA)</option>
+                          <option value="hex_clean">Hex (0xA)</option>
+                          <option value="hex_asm">Asm (0Ah)</option>
+                          <option value="dec">Decimal (10)</option>
+                      </select>
+                  </label>
+                  <label>Negative Format: 
+                      <select 
+                        value={settings.negativeFormat}
+                        onChange={(e) => dispatch(updateSettings({negativeFormat: e.target.value}))}
+                      >
+                          <option value="signed">Signed (-0xA)</option>
+                          <option value="unsigned">Unsigned (FFFFFFF6)</option>
+                      </select>
+                  </label>
               </div>
           </XPModal>
       )}
@@ -490,6 +551,14 @@ function App() {
           <XPModal title="Fill with byte" onClose={() => setActiveModal(null)} onOk={() => performPatch(fillByte)}>
              <label>Byte (Hex):</label>
              <input type="text" value={fillByte} onChange={e=>setFillByte(e.target.value)} maxLength={2} style={{width: '50px'}} />
+          </XPModal>
+      )}
+
+      {activeModal === 'logs' && (
+          <XPModal title="System Log" onClose={() => setActiveModal(null)} onOk={() => setActiveModal(null)}>
+              <div style={{width: '500px', height: '300px', overflowY: 'auto', background: 'white', border: '1px solid gray', padding: '5px', fontFamily: 'monospace'}}>
+                  {systemLogs.map((log, i) => <div key={i}>{log}</div>)}
+              </div>
           </XPModal>
       )}
     </MainContainer>

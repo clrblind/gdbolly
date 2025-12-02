@@ -71,6 +71,69 @@ class GDBController:
         except (BrokenPipeError, ConnectionResetError):
             await self.stop()
 
+    async def read_memory(self, address: str, length: int) -> list:
+        """Reads raw bytes from memory. Returns list of ints."""
+        # GDB MI command: -data-read-memory-bytes address length
+        # Response: ^done,memory=[{begin="...",offset="...",end="...",contents="hexstring"}]
+        if not self.process:
+            return []
+
+        # We need to capture the output specifically for this command.
+        # Since _read_stdout consumes everything, this is tricky with async architecture 
+        # unless we use a request/response ID system.
+        # For this prototype, we'll try to use a specialized variable approach or 
+        # rely on GDB's synchronous behavior if we weren't using asyncio streams.
+        
+        # HACK for prototype: Since pygdbmi and our loop consume stdout, 
+        # we can't easily wait for a specific response without refactoring the whole controller 
+        # to use tokens.
+        # Instead, we will assume for now we can't easily read *sync* inside this controller 
+        # structure without race conditions.
+        
+        # However, to implement 'Revert', we MUST know what was there.
+        # Let's try to implement a token-based wait if possible, or just hack it 
+        # by creating a temporary "pending request" queue.
+        
+        # REFACTOR: A robust system would use tokens. 
+        # Simplified approach: We won't implement robust token tracking here to keep code small.
+        # We will assume writes are fire-and-forget for now, but READ needs return.
+        
+        # Alternative: Use CLI command 'x' and parse console output? No, MI is better.
+        # Since we cannot easily await the specific response in the current architecture (consumer loop),
+        # We will skip reading 'orig' bytes dynamically from GDB in this step and 
+        # rely on the user or just assume 0x00 if we can't read.
+        
+        # WAIT! We can use a Future!
+        
+        # Implementation with Future:
+        token = "req_mem"
+        future = asyncio.get_event_loop().create_future()
+        
+        # We need to register this future somewhere so _read_stdout can resolve it.
+        # Adding a simple callbacks dict.
+        if not hasattr(self, 'callbacks'):
+            self.callbacks = {}
+        
+        self.callbacks[token] = future
+        
+        await self.send_command(f"{token}-data-read-memory-bytes {address} {length}")
+        
+        try:
+            result = await asyncio.wait_for(future, timeout=2.0)
+            # Result is the payload dict
+            memory = result.get('memory', [])
+            if memory:
+                contents = memory[0].get('contents', '')
+                # Convert hex string "9090" to [0x90, 0x90]
+                return [int(contents[i:i+2], 16) for i in range(0, len(contents), 2)]
+        except Exception as e:
+            print(f"Read memory failed: {e}")
+        finally:
+            if token in self.callbacks:
+                del self.callbacks[token]
+        
+        return []
+
     async def write_memory(self, address: str, bytes_list: list):
         """Writes bytes to memory using GDB set command"""
         if not bytes_list: 
@@ -85,8 +148,6 @@ class GDBController:
             
         if not clean_bytes:
             return
-
-        addr_int = int(address, 16)
         
         # Construct array string: {0x90, 0x90}
         bytes_str = ", ".join([f"{b:#04x}" for b in clean_bytes])
@@ -100,8 +161,6 @@ class GDBController:
             cmd = f"-data-disassemble -s {start_addr} -e {end_addr} -- 2"
         else:
             pass
-            
-        pass
 
     async def _read_stdout(self, process_instance):
         """
@@ -120,9 +179,19 @@ class GDBController:
                 # Защита от NoneType payload
                 if not parsed:
                     continue
-                    
+                
+                token = parsed.get('token')
                 msg_type = parsed.get('type')
                 payload = parsed.get('payload')
+
+                # Если есть токен и коллбэк, разрешаем Future
+                if token and hasattr(self, 'callbacks') and token in self.callbacks:
+                    if msg_type == 'done':
+                        self.callbacks[token].set_result(payload)
+                    elif msg_type == 'error':
+                        self.callbacks[token].set_exception(Exception(payload.get('msg', 'GDB Error')))
+                    # Don't process further for specific requests
+                    continue
 
                 # Обработка остановки
                 if msg_type == 'notify' and parsed.get('message') == 'stopped':

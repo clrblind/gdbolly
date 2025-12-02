@@ -4,6 +4,7 @@ services:
     container_name: olly_backend
     volumes:
       - ./targets:/targets  # Прокидываем папку с бинарниками внутрь
+      - ./database:/app/database # БД для сохранения состояния
     cap_add:
       - SYS_PTRACE
     security_opt:

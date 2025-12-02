@@ -6,6 +6,7 @@ const initialState = {
   registers: [],
   disassembly: [],
   logs: [],
+  systemLogs: [],
   
   // View Control
   viewStartAddress: null, // The top address of the current view
@@ -32,6 +33,7 @@ const initialState = {
     registerNaming: 'plain', 
     listingCase: 'upper', // Default upper per classic Olly
     numberFormat: 'auto', 
+    negativeFormat: 'signed', // signed, unsigned
   },
 };
 
@@ -57,6 +59,9 @@ export const debuggerSlice = createSlice({
     },
     addLog: (state, action) => {
       state.logs.push(action.payload);
+    },
+    addSystemLog: (state, action) => {
+      state.systemLogs.push(action.payload);
     },
     
     // View & History
@@ -114,6 +119,13 @@ export const debuggerSlice = createSlice({
             state.modifiedAddresses.push(addr);
         }
     },
+    removePatch: (state, action) => {
+        const addr = action.payload;
+        state.modifiedAddresses = state.modifiedAddresses.filter(a => a !== addr);
+    },
+    setPatches: (state, action) => {
+        state.modifiedAddresses = action.payload || [];
+    },
     
     setUserComment: (state, action) => {
       const { address, comment } = action.payload;
@@ -123,6 +135,9 @@ export const debuggerSlice = createSlice({
         state.userComments[address] = comment;
       }
     },
+    setComments: (state, action) => {
+        state.userComments = action.payload || {};
+    },
     updateSettings: (state, action) => {
         state.settings = { ...state.settings, ...action.payload };
     },
@@ -130,10 +145,10 @@ export const debuggerSlice = createSlice({
 });
 
 export const { 
-  setStatus, setThreadId, updateRegisters, updateDisassembly, addLog, 
+  setStatus, setThreadId, updateRegisters, updateDisassembly, addLog, addSystemLog,
   selectAddress, toggleAddressSelection, selectAddressRange, 
-  setUserComment, updateSettings,
+  setUserComment, setComments, updateSettings,
   setViewStartAddress, pushHistory, navigateBack, navigateForward,
-  markAddressModified
+  markAddressModified, removePatch, setPatches
 } = debuggerSlice.actions;
 export default debuggerSlice.reducer;

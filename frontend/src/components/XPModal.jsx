@@ -80,15 +80,16 @@ const XPModal = ({ title, children, onClose, onOk }) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
+  const windowRef = useRef(null);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'Enter' && onOk && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
-          // Careful with Enter on Inputs, sometimes it should submit, sometimes not.
-          onOk();
-      }
-      if (e.key === 'Enter' && onOk && e.target.tagName === 'INPUT') {
+      // Handle Enter
+      if (e.key === 'Enter' && onOk) {
+          // Allow textareas to insert newlines
+          if (e.target.tagName === 'TEXTAREA') return;
+          // Otherwise trigger OK
           onOk();
       }
     };
@@ -118,7 +119,7 @@ const XPModal = ({ title, children, onClose, onOk }) => {
 
   return (
     <Overlay>
-      <Window style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
+      <Window ref={windowRef} style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
         <TitleBar onMouseDown={handleMouseDown}>
           <span>{title}</span>
           <CloseButton onClick={(e) => { e.stopPropagation(); onClose(); }}>x</CloseButton>

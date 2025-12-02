@@ -64,6 +64,8 @@ const Row = styled.div`
   line-height: 16px;
   user-select: none; /* Prevents text selection on shift-click */
   
+  border: 1px solid transparent; 
+
   background-color: ${props => 
     props.$selected ? '#000080' : 
     props.$modified ? '#000000' : 
@@ -77,8 +79,7 @@ const Row = styled.div`
   };
 
   &:hover {
-    border: ${props => (!props.$selected && !props.$current && !props.$modified) ? '1px solid #000' : 'none'};
-    margin: ${props => (!props.$selected && !props.$current && !props.$modified) ? '-1px' : '0'};
+    border-color: ${props => (!props.$selected && !props.$current && !props.$modified) ? '#000' : 'transparent'};
   }
 `;
 
@@ -93,8 +94,8 @@ const Cell = styled.div`
 `;
 
 const Mnemonic = styled.span`
-  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : props.$isCall ? '#0000ff' : '#000'};
-  font-weight: ${props => props.$isCall ? 'bold' : 'normal'};
+  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : props.$isCall ? '#0000ff' : props.$isRet ? '#ff0000' : '#000'};
+  font-weight: ${props => (props.$isCall || props.$isRet) ? 'bold' : 'normal'};
 `;
 
 const Operands = styled.span`
@@ -209,6 +210,55 @@ const DisassemblyPane = ({ onContextMenu }) => {
       return settings.listingCase === 'upper' ? text.toUpperCase() : text.toLowerCase();
   };
 
+  const formatNumber = (text) => {
+      // Find numbers like $0x1A, 0x1A, -0x1A
+      // Regex: Optional $, Optional -, 0x, Hex digits
+      return text.replace(/(\$)?(-)?0x([0-9a-fA-F]+)/gi, (match, prefix, sign, hex) => {
+          let val = parseInt(hex, 16);
+          if (isNaN(val)) return match;
+          
+          let isNegative = sign === '-';
+          let finalVal = isNegative ? -val : val;
+
+          // Handle Negative Formatting (Unsigned)
+          if (isNegative && settings.negativeFormat === 'unsigned') {
+              // Assume 64-bit 2's complement
+              const bigVal = BigInt(finalVal) & 0xFFFFFFFFFFFFFFFFn;
+              return (prefix || '') + '0x' + bigVal.toString(16).toUpperCase();
+          }
+
+          // Format Base
+          let formatted = '';
+          const absVal = Math.abs(finalVal);
+          
+          switch(settings.numberFormat) {
+              case 'hex_clean': // 0xA
+                  formatted = `0x${absVal.toString(16).toUpperCase()}`;
+                  break;
+              case 'hex_asm': // 0Ah
+                  formatted = `${absVal.toString(16).toUpperCase()}h`;
+                  if (formatted.match(/^[A-F]/)) formatted = '0' + formatted;
+                  break;
+              case 'dec': // 10
+                  formatted = absVal.toString(10);
+                  break;
+              default: // auto ($0xA)
+                  formatted = `0x${absVal.toString(16)}`; 
+                  if (settings.listingCase === 'upper') formatted = formatted.toUpperCase().replace('0X', '0x');
+          }
+
+          // Restore Sign if needed (and not unsigned mode)
+          if (isNegative && settings.numberFormat !== 'auto') { 
+             formatted = '-' + formatted;
+          } else if (isNegative && settings.numberFormat === 'auto') {
+             formatted = '-' + formatted;
+          }
+
+          // Restore Prefix ($)
+          return (prefix || '') + formatted;
+      });
+  };
+
   const highlightRegisters = (text) => {
       const regRegex = /\b(eax|ebx|ecx|edx|esi|edi|esp|ebp|rax|rbx|rcx|rdx|rsi|rdi|rsp|rbp|r8|r9|r10|r11|r12|r13|r14|r15|rip|eip|al|ah|bl|bh|cl|ch|dl|dh)\b/gi;
       const parts = text.split(regRegex);
@@ -249,15 +299,15 @@ const DisassemblyPane = ({ onContextMenu }) => {
         operands = operands.replace(/%%/g, '%');
     }
 
+    // Number Formatting
+    operands = formatNumber(operands);
+
     // Swap Arguments (if 2 args exist)
     if (settings.swapArguments && operands.includes(',')) {
-        // Simple splitting by first comma (basic heuristic)
-        // Note: this assumes operands structure like "op1, op2"
         const parts = operands.split(',');
         if (parts.length >= 2) {
-             // Reconstruct: op2, op1
              const op1 = parts[0].trim();
-             const rest = parts.slice(1).join(',').trim(); // op2
+             const rest = parts.slice(1).join(',').trim(); 
              operands = `${rest},${op1}`;
         }
     }
@@ -284,6 +334,7 @@ const DisassemblyPane = ({ onContextMenu }) => {
           
           const { mnemonic, operands, gdbComment } = parseInstruction(inst);
           const isCall = mnemonic.toLowerCase().startsWith('call');
+          const isRet = mnemonic.toLowerCase().startsWith('ret');
           
           let displayComment = userComments[inst.address];
           if (!displayComment && settings.showGdbComments && gdbComment) {
@@ -307,7 +358,7 @@ const DisassemblyPane = ({ onContextMenu }) => {
                    <HexDump $selected={isSelected} $modified={isModified}>{hexDump}</HexDump>
                </Cell> 
                <Cell style={{ width: colWidths[2] }}>
-                 <Mnemonic $isCall={isCall} $selected={isSelected} $modified={isModified}>{mnemonic}</Mnemonic>
+                 <Mnemonic $isCall={isCall} $isRet={isRet} $selected={isSelected} $modified={isModified}>{mnemonic}</Mnemonic>
                  &nbsp;
                  <Operands $selected={isSelected} $modified={isModified}>{highlightRegisters(operands)}</Operands>
                </Cell>
