@@ -1,7 +1,9 @@
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from gdb_controller import gdb
 from db_manager import DBManager
+from settings_manager import SettingsManager
 import asyncio
 import hashlib
 import os
@@ -15,17 +17,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global DB Manager reference
+# Global Managers
 db_manager = None
+settings_manager = SettingsManager()
+
+async def broadcast_log(msg: str):
+    await gdb.msg_queue.put({"type": "system_log", "payload": msg})
+
+@app.on_event("startup")
+async def startup_event():
+    await settings_manager.init_db()
+
+@app.get("/settings")
+async def get_settings():
+    settings = await settings_manager.get_all_settings()
+    return settings
+
+@app.post("/settings")
+async def save_setting_endpoint(payload: dict = Body(...)):
+    key = payload.get("key")
+    value = payload.get("value")
+    if key:
+        await settings_manager.save_setting(key, value)
+    return {"status": "saved"}
 
 @app.post("/session/load")
 async def load_binary(path: str = "/targets/hello"):
     global db_manager
+    await broadcast_log(f"Session Load Request: {path}")
+    
+    # Ensure previous GDB is dead
+    await gdb.stop()
+    
     if not os.path.exists(path) and os.path.exists(path + ".c"):
-        print("Compiling hello.c...")
+        await broadcast_log(f"Compiling {path}.c ...")
         os.system(f"gcc -g {path}.c -o {path}")
     
-    # Calculate MD5 for DB identification
     try:
         with open(path, "rb") as f:
             file_hash = hashlib.md5(f.read()).hexdigest()[:8]
@@ -37,10 +64,11 @@ async def load_binary(path: str = "/targets/hello"):
     await db_manager.init_db()
     
     await gdb.start(path)
+    await broadcast_log(f"GDB Started for {path}")
     
-    # Load saved state
     comments = await db_manager.get_comments()
     patches = await db_manager.get_patches()
+    await broadcast_log(f"DB Loaded: {len(comments)} comments, {len(patches)} patches")
     
     return {
         "status": "ok", 
@@ -49,19 +77,31 @@ async def load_binary(path: str = "/targets/hello"):
         "patches": patches
     }
 
+@app.post("/database/reset")
+async def reset_database():
+    if db_manager:
+        await broadcast_log("Resetting database...")
+        await db_manager.reset_db()
+        await broadcast_log("Database cleared and re-initialized.")
+        return {"status": "ok"}
+    return {"error": "No DB loaded"}
+
 @app.post("/control/run")
 async def run_program():
+    await broadcast_log("CMD: Run")
     await gdb.send_command("-exec-run")
     return {"status": "ok"}
 
 @app.post("/control/step_into")
 async def step_into():
-    await gdb.send_command("-exec-step")
+    await broadcast_log("CMD: Step Into")
+    await gdb.send_command("-exec-step-instruction")
     return {"status": "stepping"}
 
 @app.post("/control/step_over")
 async def step_over():
-    await gdb.send_command("-exec-next")
+    await broadcast_log("CMD: Step Over")
+    await gdb.send_command("-exec-next-instruction")
     return {"status": "stepping"}
 
 @app.post("/memory/disassemble")
@@ -78,6 +118,9 @@ async def get_disassembly(payload: dict = Body(...)):
         end_int = start_int + (count * 8) 
         end_hex = hex(end_int)
         
+        # If user requests code "above", they might send a start address
+        # but the frontend usually handles the math.
+        
         cmd = f"-data-disassemble -s {start} -e {end_hex} -- 2"
         await gdb.send_command(cmd)
         return {"status": "requested", "cmd": cmd}
@@ -86,15 +129,17 @@ async def get_disassembly(payload: dict = Body(...)):
 
 @app.post("/memory/write")
 async def write_memory(payload: dict = Body(...)):
-    # payload: { "address": "0x...", "bytes": [0x90, 0x90] }
     address = payload.get("address")
     new_bytes = payload.get("bytes")
     
     if not address or new_bytes is None:
         return {"error": "Invalid parameters"}
     
+    await broadcast_log(f"Writing memory at {address}: {new_bytes}")
+
     # 1. Read original bytes
     orig_bytes = await gdb.read_memory(address, len(new_bytes))
+    await broadcast_log(f"Read original bytes: {orig_bytes}")
     
     # 2. Write new bytes
     await gdb.write_memory(address, new_bytes)
@@ -102,6 +147,7 @@ async def write_memory(payload: dict = Body(...)):
     # 3. Save to DB
     if db_manager and orig_bytes:
         await db_manager.save_patch(address, orig_bytes, new_bytes)
+        await broadcast_log(f"Patch saved to DB")
 
     return {"status": "written"}
 
@@ -116,10 +162,11 @@ async def revert_memory(payload: dict = Body(...)):
     if not patch:
         return {"error": "No patch found"}
     
-    # 2. Restore bytes (convert hex string back to ints)
+    # 2. Restore bytes
     orig_str = patch['orig_bytes']
     orig_bytes = [int(orig_str[i:i+2], 16) for i in range(0, len(orig_str), 2)]
     
+    await broadcast_log(f"Reverting {address} to {orig_bytes}")
     await gdb.write_memory(address, orig_bytes)
     
     # 3. Delete from DB
@@ -133,6 +180,7 @@ async def save_comment(payload: dict = Body(...)):
     comment = payload.get("comment")
     if db_manager and address:
         await db_manager.save_comment(address, comment)
+        await broadcast_log(f"Comment saved for {address}: {comment}")
     return {"status": "saved"}
 
 @app.websocket("/ws")

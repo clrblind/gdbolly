@@ -1,26 +1,27 @@
+
 import { createSlice } from '@reduxjs/toolkit';
+import { normalizeAddress } from '../utils/addressUtils';
 
 const initialState = {
   status: 'IDLE', // IDLE, RUNNING, PAUSED, EXITED
   currentThreadId: null,
   registers: [],
   disassembly: [],
-  logs: [],
   systemLogs: [],
   
   // View Control
-  viewStartAddress: null, // The top address of the current view
+  viewStartAddress: null,
   
   // History
-  historyPast: [], // Stack of addresses [addr1, addr2]
-  historyFuture: [], // Stack of addresses
+  historyPast: [],
+  historyFuture: [],
   
   // Selection
   selectedAddresses: [], 
   lastSelectedAddress: null, 
   
   // Patching
-  modifiedAddresses: [], // List of addresses that have been modified (for red highlight)
+  modifiedAddresses: [], 
 
   // User customizations
   userComments: {}, 
@@ -28,12 +29,12 @@ const initialState = {
   // Settings
   settings: {
     showGdbComments: true,
-    swapArguments: true, // New setting: Swap operands (dst, src)
+    swapArguments: true, 
     copyHexFormat: 'raw', 
     registerNaming: 'plain', 
-    listingCase: 'upper', // Default upper per classic Olly
+    listingCase: 'upper', 
     numberFormat: 'auto', 
-    negativeFormat: 'signed', // signed, unsigned
+    negativeFormat: 'signed',
   },
 };
 
@@ -41,6 +42,20 @@ export const debuggerSlice = createSlice({
   name: 'debugger',
   initialState,
   reducers: {
+    resetDebuggerState: (state) => {
+        // Preserve settings and logs, clear session data
+        state.status = 'IDLE';
+        state.currentThreadId = null;
+        state.registers = [];
+        state.disassembly = [];
+        state.viewStartAddress = null;
+        state.historyPast = [];
+        state.historyFuture = [];
+        state.selectedAddresses = [];
+        state.lastSelectedAddress = null;
+        state.modifiedAddresses = [];
+        state.userComments = {};
+    },
     setStatus: (state, action) => {
       state.status = action.payload;
     },
@@ -51,30 +66,32 @@ export const debuggerSlice = createSlice({
       state.registers = action.payload;
     },
     updateDisassembly: (state, action) => {
-      state.disassembly = action.payload;
-      // If we don't have a view start, set it to the first received
+      state.disassembly = action.payload.map(item => ({
+          ...item,
+          address: normalizeAddress(item.address)
+      }));
       if (!state.viewStartAddress && action.payload.length > 0) {
-          state.viewStartAddress = action.payload[0].address;
+          state.viewStartAddress = normalizeAddress(action.payload[0].address);
       }
     },
-    addLog: (state, action) => {
-      state.logs.push(action.payload);
-    },
     addSystemLog: (state, action) => {
+      if (state.systemLogs.length > 1000) state.systemLogs.shift();
       state.systemLogs.push(action.payload);
+    },
+    clearSystemLogs: (state) => {
+      state.systemLogs = [];
     },
     
     // View & History
     setViewStartAddress: (state, action) => {
-        state.viewStartAddress = action.payload;
+        state.viewStartAddress = normalizeAddress(action.payload);
     },
     pushHistory: (state, action) => {
-        const addr = action.payload;
-        // Don't push if it's same as top
+        const addr = normalizeAddress(action.payload);
         if (state.historyPast.length === 0 || state.historyPast[state.historyPast.length - 1] !== addr) {
             state.historyPast.push(addr);
         }
-        state.historyFuture = []; // Clear future on new branch
+        state.historyFuture = []; 
     },
     navigateBack: (state) => {
         if (state.historyPast.length > 0) {
@@ -92,15 +109,19 @@ export const debuggerSlice = createSlice({
             state.viewStartAddress = next;
         }
     },
+    clearHistory: (state) => {
+        state.historyPast = [];
+        state.historyFuture = [];
+    },
 
     // Selection Logic
     selectAddress: (state, action) => {
-        const addr = action.payload;
+        const addr = normalizeAddress(action.payload);
         state.selectedAddresses = [addr];
         state.lastSelectedAddress = addr;
     },
     toggleAddressSelection: (state, action) => {
-        const addr = action.payload;
+        const addr = normalizeAddress(action.payload);
         if (state.selectedAddresses.includes(addr)) {
             state.selectedAddresses = state.selectedAddresses.filter(a => a !== addr);
         } else {
@@ -109,34 +130,49 @@ export const debuggerSlice = createSlice({
         state.lastSelectedAddress = addr;
     },
     selectAddressRange: (state, action) => {
-        state.selectedAddresses = action.payload;
+        state.selectedAddresses = action.payload.map(normalizeAddress);
     },
     
     // Patching
     markAddressModified: (state, action) => {
-        const addr = action.payload;
-        if (!state.modifiedAddresses.includes(addr)) {
-            state.modifiedAddresses.push(addr);
+        const payload = action.payload;
+        if (Array.isArray(payload)) {
+            payload.forEach(rawAddr => {
+                const addr = normalizeAddress(rawAddr);
+                if (!state.modifiedAddresses.includes(addr)) state.modifiedAddresses.push(addr);
+            });
+        } else {
+            const addr = normalizeAddress(payload);
+            if (!state.modifiedAddresses.includes(addr)) {
+                state.modifiedAddresses.push(addr);
+            }
         }
     },
     removePatch: (state, action) => {
-        const addr = action.payload;
+        const addr = normalizeAddress(action.payload);
         state.modifiedAddresses = state.modifiedAddresses.filter(a => a !== addr);
     },
     setPatches: (state, action) => {
-        state.modifiedAddresses = action.payload || [];
+        state.modifiedAddresses = (action.payload || []).map(normalizeAddress);
     },
     
     setUserComment: (state, action) => {
       const { address, comment } = action.payload;
+      const normAddr = normalizeAddress(address);
       if (comment === null || comment === '') {
-        delete state.userComments[address];
+        delete state.userComments[normAddr];
       } else {
-        state.userComments[address] = comment;
+        state.userComments[normAddr] = comment;
       }
     },
     setComments: (state, action) => {
-        state.userComments = action.payload || {};
+        const normalized = {};
+        if (action.payload) {
+            Object.keys(action.payload).forEach(k => {
+                normalized[normalizeAddress(k)] = action.payload[k];
+            });
+        }
+        state.userComments = normalized;
     },
     updateSettings: (state, action) => {
         state.settings = { ...state.settings, ...action.payload };
@@ -145,10 +181,11 @@ export const debuggerSlice = createSlice({
 });
 
 export const { 
-  setStatus, setThreadId, updateRegisters, updateDisassembly, addLog, addSystemLog,
+  resetDebuggerState,
+  setStatus, setThreadId, updateRegisters, updateDisassembly, addSystemLog, clearSystemLogs,
   selectAddress, toggleAddressSelection, selectAddressRange, 
   setUserComment, setComments, updateSettings,
-  setViewStartAddress, pushHistory, navigateBack, navigateForward,
+  setViewStartAddress, pushHistory, navigateBack, navigateForward, clearHistory,
   markAddressModified, removePatch, setPatches
 } = debuggerSlice.actions;
 export default debuggerSlice.reducer;

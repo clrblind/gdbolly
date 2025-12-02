@@ -1,3 +1,4 @@
+
 import sqlite3
 import os
 import asyncio
@@ -36,6 +37,17 @@ class DBManager:
         ''')
 
         self.conn.commit()
+
+    async def reset_db(self):
+        """Closes connection, deletes file, re-initializes"""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+        
+        if os.path.exists(self.db_path):
+            await asyncio.to_thread(os.remove, self.db_path)
+        
+        await self.init_db()
 
     async def save_comment(self, address: str, comment: str):
         await asyncio.to_thread(self._execute, 

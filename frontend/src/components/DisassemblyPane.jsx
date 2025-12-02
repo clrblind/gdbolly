@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
 import { useSelector, useDispatch } from 'react-redux';
@@ -5,6 +6,9 @@ import {
     selectAddress, toggleAddressSelection, selectAddressRange, 
     pushHistory, setViewStartAddress 
 } from '../store/debuggerSlice';
+import { parseInstruction } from '../utils/asmFormatter';
+import { offsetAddress, normalizeAddress } from '../utils/addressUtils';
+import DisassemblyRow from './DisassemblyRow';
 
 const PaneContainer = styled.div`
   display: flex;
@@ -12,6 +16,7 @@ const PaneContainer = styled.div`
   height: 100%;
   width: 100%;
   cursor: default;
+  outline: none; /* Focusable */
 `;
 
 const HeaderRow = styled.div`
@@ -57,59 +62,6 @@ const ContentArea = styled.div`
   font-size: 13px;
 `;
 
-const Row = styled.div`
-  display: flex;
-  white-space: pre;
-  height: 16px;
-  line-height: 16px;
-  user-select: none; /* Prevents text selection on shift-click */
-  
-  border: 1px solid transparent; 
-
-  background-color: ${props => 
-    props.$selected ? '#000080' : 
-    props.$modified ? '#000000' : 
-    props.$current ? '#c0c0c0' : 'transparent'
-  };
-  
-  color: ${props => 
-    props.$selected ? '#ffffff' : 
-    props.$modified ? '#ff0000' : 
-    props.$current ? '#000000' : 'inherit'
-  };
-
-  &:hover {
-    border-color: ${props => (!props.$selected && !props.$current && !props.$modified) ? '#000' : 'transparent'};
-  }
-`;
-
-const Cell = styled.div`
-  padding-left: 4px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  border-right: 1px solid #d4d0c8;
-  flex-shrink: 0;
-  box-sizing: border-box;
-`;
-
-const Mnemonic = styled.span`
-  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : props.$isCall ? '#0000ff' : props.$isRet ? '#ff0000' : '#000'};
-  font-weight: ${props => (props.$isCall || props.$isRet) ? 'bold' : 'normal'};
-`;
-
-const Operands = styled.span`
-  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : '#000'};
-`;
-
-const CommentText = styled.span`
-  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : '#808080'};
-`;
-
-const HexDump = styled.div`
-  color: ${props => props.$selected ? '#fff' : props.$modified ? '#ff0000' : '#808080'};
-`;
-
 const ResizeTooltip = styled.div`
     position: fixed;
     background: #ffffe1;
@@ -129,25 +81,30 @@ const DisassemblyPane = ({ onContextMenu }) => {
   const settings = useSelector(state => state.debug.settings);
   const registers = useSelector(state => state.debug.registers);
   const modifiedAddresses = useSelector(state => state.debug.modifiedAddresses);
+  const viewStartAddress = useSelector(state => state.debug.viewStartAddress);
   
-  // Find EIP
-  const ripReg = registers.find(r => r.number === '16' || r.number === 'rip' || r.number === 'eip'); // 16 for x64 usually
-  const currentIP = ripReg ? ripReg.value : null;
+  const ripReg = registers.find(r => r.number === '16' || r.number === 'rip' || r.number === 'eip'); 
+  const currentIP = ripReg ? normalizeAddress(ripReg.value) : null;
 
   const [colWidths, setColWidths] = useState([140, 160, 680, 180]); 
   const headers = ['Address', 'Hex dump', 'Disassembly', 'Comment'];
   
   const resizingRef = useRef(null);
   const [resizeTooltip, setResizeTooltip] = useState(null);
+  const containerRef = useRef(null);
+
+  // Drag selection state
+  const isSelecting = useRef(false);
+  const selectionStartIdx = useRef(null);
 
   const startResize = (index, e) => {
     e.preventDefault();
     resizingRef.current = { index, startX: e.clientX, startWidth: colWidths[index] };
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', handleResizeMove);
+    document.addEventListener('mouseup', handleResizeUp);
   };
 
-  const handleMouseMove = (e) => {
+  const handleResizeMove = (e) => {
     if (!resizingRef.current) return;
     const { index, startX, startWidth } = resizingRef.current;
     const delta = e.clientX - startX;
@@ -160,29 +117,93 @@ const DisassemblyPane = ({ onContextMenu }) => {
     setResizeTooltip({ x: e.clientX + 10, y: e.clientY + 10, width: newWidth });
   };
 
-  const handleMouseUp = () => {
+  const handleResizeUp = () => {
     resizingRef.current = null;
     setResizeTooltip(null);
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('mousemove', handleResizeMove);
+    document.removeEventListener('mouseup', handleResizeUp);
   };
 
-  const handleRowClick = (e, addr, index) => {
-    if (e.ctrlKey) {
+  // Scroll Pre-fetching
+  const handleScroll = (e) => {
+      const el = e.target;
+      if (el.scrollTop === 0 && instructions.length > 0) {
+          // Scrolled to top, try to fetch previous (~10 instructions back)
+          // Heuristic: -64 bytes
+          const prev = offsetAddress(instructions[0].address, -64);
+          dispatch(setViewStartAddress(prev));
+      } else if (el.scrollHeight - el.scrollTop === el.clientHeight && instructions.length > 0) {
+          // Scrolled to bottom, fetch next chunk starting from last instruction
+          // The ViewStart will effectively jump, this mimics paging.
+          // Real infinite scroll needs list merging which is complex, 
+          // for now we just jump view to continue reading.
+          const next = instructions[instructions.length - 1].address;
+          dispatch(setViewStartAddress(next));
+      }
+  };
+
+  const handleKeyDown = (e) => {
+      // Allow moving selection with arrows
+      if (selectedAddresses.length === 0 && instructions.length > 0) return;
+      
+      const currentAddr = lastSelected || selectedAddresses[0];
+      const idx = instructions.findIndex(i => i.address === currentAddr);
+      
+      if (idx === -1) return;
+
+      if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (idx < instructions.length - 1) {
+              const next = instructions[idx + 1].address;
+              dispatch(selectAddress(next));
+          }
+      } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (idx > 0) {
+              const prev = instructions[idx - 1].address;
+              dispatch(selectAddress(prev));
+          }
+      }
+  };
+
+  const handleMouseDown = (addr, idx, e) => {
+      if (e.button !== 0) return; 
+      isSelecting.current = true;
+      selectionStartIdx.current = idx;
+      
+      if (e.ctrlKey) {
         dispatch(toggleAddressSelection(addr));
-    } else if (e.shiftKey && lastSelected) {
-        const lastIdx = instructions.findIndex(i => i.address === lastSelected);
-        if (lastIdx !== -1) {
-            const start = Math.min(lastIdx, index);
-            const end = Math.max(lastIdx, index);
-            const range = instructions.slice(start, end + 1).map(i => i.address);
-            dispatch(selectAddressRange(range));
-        } else {
-            dispatch(selectAddress(addr));
-        }
-    } else {
+      } else if (e.shiftKey && lastSelected) {
+        handleShiftClick(idx);
+      } else {
         dispatch(selectAddress(addr));
-    }
+      }
+  };
+
+  const handleMouseEnter = (addr, idx) => {
+      if (isSelecting.current) {
+          const start = selectionStartIdx.current;
+          const end = idx;
+          const low = Math.min(start, end);
+          const high = Math.max(start, end);
+          
+          const range = instructions.slice(low, high + 1).map(i => i.address);
+          dispatch(selectAddressRange(range));
+      }
+  };
+
+  const handleMouseUp = () => {
+      isSelecting.current = false;
+  };
+
+  const handleShiftClick = (index) => {
+      const lastIdx = instructions.findIndex(i => i.address === lastSelected);
+      if (lastIdx !== -1) {
+          const start = Math.min(lastIdx, index);
+          const end = Math.max(lastIdx, index);
+          const range = instructions.slice(start, end + 1).map(i => i.address);
+          dispatch(selectAddressRange(range));
+      }
   };
 
   const handleRightClick = (e, inst) => {
@@ -193,130 +214,25 @@ const DisassemblyPane = ({ onContextMenu }) => {
     if (onContextMenu) onContextMenu(e, inst);
   };
 
-  const handleDoubleClick = (inst) => {
-      // Logic to follow call/jmp
-      const parts = inst.inst.split(' ');
+  const handleDoubleClick = (inst, parsed) => {
+      const parts = parsed.operands.split(',');
       for (let part of parts) {
-          if (part.startsWith('0x')) {
-              const target = part.replace(/[,]/g, '');
-              dispatch(pushHistory(instructions[0].address)); // Save current view start
-              dispatch(setViewStartAddress(target));
+          const clean = part.trim();
+          if (clean.match(/^0x[0-9a-fA-F]+$/)) {
+              dispatch(pushHistory(instructions[0].address)); 
+              dispatch(setViewStartAddress(clean));
               return;
           }
       }
   };
 
-  const formatTextCase = (text) => {
-      return settings.listingCase === 'upper' ? text.toUpperCase() : text.toLowerCase();
-  };
-
-  const formatNumber = (text) => {
-      // Find numbers like $0x1A, 0x1A, -0x1A
-      // Regex: Optional $, Optional -, 0x, Hex digits
-      return text.replace(/(\$)?(-)?0x([0-9a-fA-F]+)/gi, (match, prefix, sign, hex) => {
-          let val = parseInt(hex, 16);
-          if (isNaN(val)) return match;
-          
-          let isNegative = sign === '-';
-          let finalVal = isNegative ? -val : val;
-
-          // Handle Negative Formatting (Unsigned)
-          if (isNegative && settings.negativeFormat === 'unsigned') {
-              // Assume 64-bit 2's complement
-              const bigVal = BigInt(finalVal) & 0xFFFFFFFFFFFFFFFFn;
-              return (prefix || '') + '0x' + bigVal.toString(16).toUpperCase();
-          }
-
-          // Format Base
-          let formatted = '';
-          const absVal = Math.abs(finalVal);
-          
-          switch(settings.numberFormat) {
-              case 'hex_clean': // 0xA
-                  formatted = `0x${absVal.toString(16).toUpperCase()}`;
-                  break;
-              case 'hex_asm': // 0Ah
-                  formatted = `${absVal.toString(16).toUpperCase()}h`;
-                  if (formatted.match(/^[A-F]/)) formatted = '0' + formatted;
-                  break;
-              case 'dec': // 10
-                  formatted = absVal.toString(10);
-                  break;
-              default: // auto ($0xA)
-                  formatted = `0x${absVal.toString(16)}`; 
-                  if (settings.listingCase === 'upper') formatted = formatted.toUpperCase().replace('0X', '0x');
-          }
-
-          // Restore Sign if needed (and not unsigned mode)
-          if (isNegative && settings.numberFormat !== 'auto') { 
-             formatted = '-' + formatted;
-          } else if (isNegative && settings.numberFormat === 'auto') {
-             formatted = '-' + formatted;
-          }
-
-          // Restore Prefix ($)
-          return (prefix || '') + formatted;
-      });
-  };
-
-  const highlightRegisters = (text) => {
-      const regRegex = /\b(eax|ebx|ecx|edx|esi|edi|esp|ebp|rax|rbx|rcx|rdx|rsi|rdi|rsp|rbp|r8|r9|r10|r11|r12|r13|r14|r15|rip|eip|al|ah|bl|bh|cl|ch|dl|dh)\b/gi;
-      const parts = text.split(regRegex);
-      return parts.map((part, i) => {
-          if (part.match(regRegex)) {
-              return <b key={i}>{part}</b>;
-          }
-          return part;
-      });
-  };
-
-  const parseInstruction = (instData) => {
-    let rawInst = instData.inst || "";
-    let mnemonic = "";
-    let operands = "";
-    let gdbComment = "";
-
-    const commentSplit = rawInst.split('#');
-    let codePart = commentSplit[0].trim();
-    if (commentSplit.length > 1) {
-        gdbComment = commentSplit.slice(1).join('#').trim();
-    }
-
-    const spaceIdx = codePart.indexOf(' ');
-    if (spaceIdx === -1) {
-        mnemonic = codePart;
-    } else {
-        mnemonic = codePart.substring(0, spaceIdx);
-        operands = codePart.substring(spaceIdx).trim(); 
-    }
-
-    mnemonic = formatTextCase(mnemonic);
-    operands = formatTextCase(operands);
-    
-    // Register Naming
-    if (settings.registerNaming === 'percent') {
-        operands = operands.replace(/\b(rax|rbx|rcx|rdx|rsi|rdi|rsp|rbp|r[0-9]+|eip|rip)\b/gi, '%$1');
-        operands = operands.replace(/%%/g, '%');
-    }
-
-    // Number Formatting
-    operands = formatNumber(operands);
-
-    // Swap Arguments (if 2 args exist)
-    if (settings.swapArguments && operands.includes(',')) {
-        const parts = operands.split(',');
-        if (parts.length >= 2) {
-             const op1 = parts[0].trim();
-             const rest = parts.slice(1).join(',').trim(); 
-             operands = `${rest},${op1}`;
-        }
-    }
-
-    return { mnemonic, operands, gdbComment };
-  };
-
   return (
-    <PaneContainer>
+    <PaneContainer 
+        tabIndex="0" 
+        onKeyDown={handleKeyDown}
+        onMouseUp={handleMouseUp} 
+        onMouseLeave={handleMouseUp}
+    >
       <HeaderRow>
         {headers.map((title, idx) => (
           <HeaderCell key={idx} style={{ width: colWidths[idx] }}>
@@ -326,46 +242,37 @@ const DisassemblyPane = ({ onContextMenu }) => {
         ))}
       </HeaderRow>
       
-      <ContentArea>
+      <ContentArea ref={containerRef} onScroll={handleScroll}>
         {instructions.map((inst, idx) => {
-          const isCurrentIP = BigInt(inst.address) === (currentIP ? BigInt(currentIP) : BigInt(-1));
-          const isSelected = selectedAddresses.includes(inst.address);
-          const isModified = modifiedAddresses.includes(inst.address);
+          const normAddr = normalizeAddress(inst.address);
+          const isCurrentIP = normAddr === currentIP;
+          const isSelected = selectedAddresses.includes(normAddr);
+          const isModified = modifiedAddresses.includes(normAddr);
           
-          const { mnemonic, operands, gdbComment } = parseInstruction(inst);
-          const isCall = mnemonic.toLowerCase().startsWith('call');
-          const isRet = mnemonic.toLowerCase().startsWith('ret');
+          const parsed = parseInstruction(inst, settings);
           
-          let displayComment = userComments[inst.address];
-          if (!displayComment && settings.showGdbComments && gdbComment) {
-             displayComment = gdbComment;
+          let displayComment = userComments[normAddr];
+          if (!displayComment && settings.showGdbComments && parsed.gdbComment) {
+             displayComment = parsed.gdbComment;
           }
 
-          const hexDump = inst.opcodes || "??";
-
           return (
-            <Row 
-              key={inst.address} 
-              $current={isCurrentIP} 
-              $selected={isSelected}
-              $modified={isModified}
-              onClick={(e) => handleRowClick(e, inst.address, idx)}
-              onContextMenu={(e) => handleRightClick(e, inst)}
-              onDoubleClick={() => handleDoubleClick(inst)}
-            >
-               <Cell style={{ width: colWidths[0] }}>{inst.address}</Cell>
-               <Cell style={{ width: colWidths[1] }}>
-                   <HexDump $selected={isSelected} $modified={isModified}>{hexDump}</HexDump>
-               </Cell> 
-               <Cell style={{ width: colWidths[2] }}>
-                 <Mnemonic $isCall={isCall} $isRet={isRet} $selected={isSelected} $modified={isModified}>{mnemonic}</Mnemonic>
-                 &nbsp;
-                 <Operands $selected={isSelected} $modified={isModified}>{highlightRegisters(operands)}</Operands>
-               </Cell>
-               <Cell style={{ width: colWidths[3] }}>
-                 <CommentText $selected={isSelected} $modified={isModified}>{displayComment}</CommentText>
-               </Cell>
-            </Row>
+            <DisassemblyRow 
+                key={inst.address}
+                inst={inst}
+                parsed={parsed}
+                colWidths={colWidths}
+                isCurrent={isCurrentIP}
+                isSelected={isSelected}
+                isModified={isModified}
+                comment={displayComment}
+                onClick={(e) => {}} 
+                onMouseDown={(e) => handleMouseDown(normAddr, idx, e)}
+                onMouseEnter={() => handleMouseEnter(normAddr, idx)}
+                onContextMenu={(e) => handleRightClick(e, inst)}
+                onDoubleClick={() => handleDoubleClick(inst, parsed)}
+                onMouseUp={handleMouseUp}
+            />
           );
         })}
       </ContentArea>
