@@ -181,6 +181,8 @@ class GDBController:
             await self.log(f"ReadMem Error: {e}")
             return None
 
+
+
     async def _read_stdout(self, process_instance):
         """Main IO Loop with fixed parsing logic"""
         try:
@@ -250,6 +252,7 @@ class GDBController:
                 
                 elif msg_type == 'result':
                     if 'register-values' in payload:
+                        await self.log(f"Received register values: {len(payload['register-values'])} items")
                         await self.msg_queue.put({"type": "registers", "payload": payload['register-values']})
                     elif 'asm_insns' in payload:
                         await self.msg_queue.put({"type": "disassembly", "payload": payload['asm_insns']})
@@ -284,6 +287,9 @@ class GDBController:
              await self.msg_queue.put({"type": "status", "payload": "EXITED"})
              return
 
+        # Auto-refresh context on stop
+        await self.send_command("-data-list-register-values x")
+
     async def get_metadata(self) -> dict:
         """Fetches PID, Architecture and Image Base"""
         metadata = {"pid": None, "arch": None, "imageBase": None}
@@ -311,16 +317,22 @@ class GDBController:
             # Better approach for PID: -list-thread-groups i1
             res = await self.execute_command("-list-thread-groups i1")
             # ^done,groups=[{id="i1",type="process",pid="166",...}]
-            if res and 'groups' in res and len(res['groups']) > 0:
-                metadata['pid'] = res['groups'][0].get('pid')
+            # OR ^done,threads=[{id="1",target-id="Thread ... (LWP 26)",...}]
+            
+            if res:
+                if 'groups' in res and len(res['groups']) > 0:
+                     metadata['pid'] = res['groups'][0].get('pid')
+                elif 'threads' in res and len(res['threads']) > 0:
+                    # Try to extract LWP from target-id
+                    target_id = res['threads'][0].get('target-id', '')
+                    import re
+                    match = re.search(r'LWP\s+(\d+)', target_id)
+                    if match:
+                        metadata['pid'] = match.group(1)
 
             # Architecture
             # -data-evaluate-expression $_gdb_setting("architecture") (requires new gdb)
             # or console "show architecture"
-            # Let's try parsing console output? No.
-            # Use 'show architecture' via -interpreter-exec?
-            # It's tricky to capture console output reliably synchronously here without changing `execute_command` 
-            # to capture output.
             
             # Use Python API via MI? -interpreter-exec  python "import gdb; print(gdb.execute('show architecture', to_string=True))" ?
             # Simpler: assume getting generic 'architecture' is hard via MI without stream parsing.
@@ -333,17 +345,17 @@ class GDBController:
                 elif '4' in size: metadata['arch'] = 'x86'
 
             # Image Base
-            # -interpreter-exec console "info proc mappings"
-            # Again, tricky to capture.
-            # Maybe just use "starti" address?
-            # Or -data-read-memory-bytes using entry point?
+            # Try specific symbol that usually points to base
+            res = await self.execute_command("-data-evaluate-expression (void*)&__executable_start")
+            if res and 'value' in res:
+                val = res['value'].split(' ')[0] # "0x08048000 <__executable_start>"
+                metadata['imageBase'] = val
             
         except Exception as e:
             await self.log(f"Metadata fetch error: {e}")
             
         return metadata
 
-    # Auto-refresh context on stop
-    await self.send_command("-data-list-register-values x")
+
 
 # gdb = GDBController() - Instantiation moved to __init__.py
