@@ -3,39 +3,16 @@ import React, { useRef, useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useSelector } from 'react-redux';
 
+
+
 const WinContainer = styled.div`
   width: 100%;
   height: 100%;
   background: #fff;
-  border: 2px inset #fff; /* Looks like a pane now */
+  border: 2px inset #fff;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-`;
-
-const WinHeader = styled.div`
-  height: 20px;
-  background: linear-gradient(90deg, #000080, #1084d0);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 5px;
-  font-family: 'Tahoma', sans-serif;
-  font-size: 11px;
-  font-weight: bold;
-  cursor: default;
-  flex-shrink: 0;
-`;
-
-const CloseBtn = styled.button`
-  width: 16px;
-  height: 16px;
-  background: #d4d0c8;
-  border: 1px outset #fff;
-  cursor: pointer;
-  padding: 0;
-  line-height: 14px;
 `;
 
 const TableContainer = styled.div`
@@ -50,7 +27,6 @@ const TableContainer = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  /* table-layout: fixed; Removed to allow horizontal scroll */
 `;
 
 const Th = styled.th`
@@ -69,7 +45,7 @@ const StyledRow = styled.tr`
   color: ${props => {
     if (props.$selected) return '#fff';
     if (props.type === 'error') return 'red';
-    if (props.type === 'warning') return '#808000'; // Olive for warnings
+    if (props.type === 'warning') return '#808000';
     return '#000';
   }};
   cursor: pointer;
@@ -77,7 +53,6 @@ const StyledRow = styled.tr`
   &:hover {
     background: ${props => props.$selected ? '#000080' : '#e0e0e0'};
   }
-  /* Use outline instead of border to prevent jitter */
   outline: ${props => props.$hovered ? '1px dotted black' : 'none'};
 `;
 
@@ -88,14 +63,14 @@ const Td = styled.td`
   border-bottom: 1px solid transparent; 
 `;
 
-const LogRow = ({ log, isSelected, onClick }) => {
+const LogRow = ({ log, index, isSelected, onClick }) => {
   const [hovered, setHovered] = useState(false);
   return (
     <StyledRow
       $selected={isSelected}
       $hovered={hovered && !isSelected}
       type={log.type}
-      onClick={onClick}
+      onClick={(e) => onClick(e, index, log.id)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -107,45 +82,65 @@ const LogRow = ({ log, isSelected, onClick }) => {
 
 const SystemLogWindow = ({ onClose }) => {
   const logs = useSelector(state => state.debug.systemLogs);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedIndices, setSelectedIndices] = useState(new Set());
+  const lastSelectedIndex = useRef(null);
   const containerRef = useRef(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     // Auto scroll if nothing selected or at bottom
-    if (!selectedId && bottomRef.current) {
+    if (selectedIndices.size === 0 && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [logs, selectedId]);
+  }, [logs.length]); // Only scroll on new logs if nothing selected
+
+  const handleRowClick = (e, index, id) => {
+    const newSelection = new Set(selectedIndices);
+
+    if (e.ctrlKey) {
+      if (newSelection.has(index)) newSelection.delete(index);
+      else newSelection.add(index);
+      lastSelectedIndex.current = index;
+    } else if (e.shiftKey && lastSelectedIndex.current !== null) {
+      const start = Math.min(lastSelectedIndex.current, index);
+      const end = Math.max(lastSelectedIndex.current, index);
+      newSelection.clear();
+      for (let i = start; i <= end; i++) {
+        newSelection.add(i);
+      }
+    } else {
+      newSelection.clear();
+      newSelection.add(index);
+      lastSelectedIndex.current = index;
+    }
+    setSelectedIndices(newSelection);
+  };
 
   const handleKeyDown = (e) => {
-    // Close on Escape
     if (e.key === 'Escape') {
       e.preventDefault();
       if (onClose) onClose();
-      return;
     }
 
-    if (logs.length === 0) return;
-    const idx = logs.findIndex(l => l.id === selectedId);
+    // Select All
+    if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) {
+      e.preventDefault();
+      const all = new Set();
+      logs.forEach((_, i) => all.add(i));
+      setSelectedIndices(all);
+    }
 
-    if (e.key === 'ArrowDown') {
+    // Copy
+    if (e.ctrlKey && (e.key === 'c' || e.key === 'C')) {
       e.preventDefault();
-      const nextIdx = (idx === -1 || idx === logs.length - 1) ? logs.length - 1 : idx + 1;
-      setSelectedId(logs[nextIdx].id);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prevIdx = (idx === -1 || idx === 0) ? 0 : idx - 1;
-      setSelectedId(logs[prevIdx].id);
+      const selectedLogs = logs.filter((_, i) => selectedIndices.has(i));
+      const text = selectedLogs.map(l => `${l.timestamp}\t${l.message}`).join('\n');
+      navigator.clipboard.writeText(text);
     }
   };
 
   return (
     <WinContainer tabIndex="0" onKeyDown={handleKeyDown}>
-      <WinHeader>
-        <span>System Log</span>
-        <CloseBtn onClick={onClose}>x</CloseBtn>
-      </WinHeader>
       <TableContainer ref={containerRef}>
         <Table>
           <thead style={{ height: '20px' }}>
@@ -155,12 +150,13 @@ const SystemLogWindow = ({ onClose }) => {
             </tr>
           </thead>
           <tbody>
-            {logs.map(log => (
+            {logs.map((log, index) => (
               <LogRow
                 key={log.id}
                 log={log}
-                isSelected={selectedId === log.id}
-                onClick={() => setSelectedId(log.id)}
+                index={index}
+                isSelected={selectedIndices.has(index)}
+                onClick={handleRowClick}
               />
             ))}
             <tr ref={bottomRef}></tr>

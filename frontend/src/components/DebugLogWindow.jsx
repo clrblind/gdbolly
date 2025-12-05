@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useSelector } from 'react-redux';
@@ -13,31 +12,6 @@ const WinContainer = styled.div`
   box-sizing: border-box;
 `;
 
-const WinHeader = styled.div`
-  height: 20px;
-  background: linear-gradient(90deg, #000080, #1084d0);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 5px;
-  font-family: 'Tahoma', sans-serif;
-  font-size: 11px;
-  font-weight: bold;
-  cursor: default;
-  flex-shrink: 0;
-`;
-
-const CloseBtn = styled.button`
-  width: 16px;
-  height: 16px;
-  background: #d4d0c8;
-  border: 1px outset #fff;
-  cursor: pointer;
-  padding: 0;
-  line-height: 14px;
-`;
-
 const TableContainer = styled.div`
   flex: 1;
   overflow: auto; /* Both vertical and horizontal */
@@ -50,7 +24,6 @@ const TableContainer = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  /* table-layout: fixed; Removed to allow horizontal expansion for long logs */
 `;
 
 const Th = styled.th`
@@ -84,73 +57,111 @@ const Td = styled.td`
   vertical-align: top;
 `;
 
-const LogRow = ({ log, isSelected, onClick }) => {
-    const [hovered, setHovered] = useState(false);
+const LogRow = ({ log, index, isSelected, onClick }) => {
+  const [hovered, setHovered] = useState(false);
 
-    // Attempt to parse address if message starts with address-like string
-    // For now just basic placeholder logic logic or regex
-    // E.g. "00401000: Message"
-    let address = "";
-    let message = log.message;
+  // Attempt to parse address if message starts with placeholder logic
+  let address = "";
+  let message = log.message;
 
-    // Simple heuristic: if message starts with hex, split it
-    // This depends on how backend sends it. For now assume raw message.
-
-    return (
-        <StyledRow
-            $selected={isSelected}
-            $hovered={hovered && !isSelected}
-            onClick={onClick}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-        >
-            <Td style={{ borderRight: '1px solid #ccc', minWidth: '60px' }}>{address}</Td>
-            <Td style={{ minWidth: '100%', display: 'inline-block' }}>{message}</Td>
-        </StyledRow>
-    );
+  return (
+    <StyledRow
+      $selected={isSelected}
+      $hovered={hovered && !isSelected}
+      onClick={(e) => onClick(e, index, log.id)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <Td style={{ borderRight: '1px solid #ccc', minWidth: '60px' }}>{address}</Td>
+      <Td style={{ minWidth: '100%', display: 'inline-block' }}>{message}</Td>
+    </StyledRow>
+  );
 };
 
 const DebugLogWindow = ({ onClose }) => {
-    const logs = useSelector(state => state.debug.debugLogs);
-    const [selectedId, setSelectedId] = useState(null);
-    const containerRef = useRef(null);
-    const bottomRef = useRef(null);
+  const logs = useSelector(state => state.debug.debugLogs);
+  const [selectedIndices, setSelectedIndices] = useState(new Set());
+  const lastSelectedIndex = useRef(null);
+  const containerRef = useRef(null);
+  const bottomRef = useRef(null);
 
-    useEffect(() => {
-        if (!selectedId && bottomRef.current) {
-            bottomRef.current.scrollIntoView({ behavior: "smooth" });
-        }
-    }, [logs, selectedId]);
+  useEffect(() => {
+    if (selectedIndices.size === 0 && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [logs.length]);
 
-    return (
-        <WinContainer>
-            <WinHeader>
-                <span>Debug Log (Target Output)</span>
-                <CloseBtn onClick={onClose}>x</CloseBtn>
-            </WinHeader>
-            <TableContainer ref={containerRef}>
-                <Table>
-                    <thead style={{ height: '20px' }}>
-                        <tr>
-                            <Th style={{ width: '80px' }}>Address</Th>
-                            <Th>Message</Th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {logs.map(log => (
-                            <LogRow
-                                key={log.id}
-                                log={log}
-                                isSelected={selectedId === log.id}
-                                onClick={() => setSelectedId(log.id)}
-                            />
-                        ))}
-                        <tr ref={bottomRef}></tr>
-                    </tbody>
-                </Table>
-            </TableContainer>
-        </WinContainer>
-    );
+  const handleRowClick = (e, index, id) => {
+    const newSelection = new Set(selectedIndices);
+
+    if (e.ctrlKey) {
+      if (newSelection.has(index)) newSelection.delete(index);
+      else newSelection.add(index);
+      lastSelectedIndex.current = index;
+    } else if (e.shiftKey && lastSelectedIndex.current !== null) {
+      const start = Math.min(lastSelectedIndex.current, index);
+      const end = Math.max(lastSelectedIndex.current, index);
+      newSelection.clear();
+      for (let i = start; i <= end; i++) {
+        newSelection.add(i);
+      }
+    } else {
+      newSelection.clear();
+      newSelection.add(index);
+      lastSelectedIndex.current = index;
+    }
+    setSelectedIndices(newSelection);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (onClose) onClose();
+    }
+
+    // Select All
+    if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) {
+      e.preventDefault();
+      const all = new Set();
+      logs.forEach((_, i) => all.add(i));
+      setSelectedIndices(all);
+    }
+
+    // Copy
+    if (e.ctrlKey && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      const selectedLogs = logs.filter((_, i) => selectedIndices.has(i));
+      const text = selectedLogs.map(l => l.message).join('\n');
+      navigator.clipboard.writeText(text);
+    }
+  };
+
+  return (
+    <WinContainer tabIndex="0" onKeyDown={handleKeyDown}>
+      <TableContainer ref={containerRef}>
+        <Table>
+          <thead style={{ height: '20px' }}>
+            <tr>
+              <Th style={{ width: '80px' }}>Address</Th>
+              <Th>Message</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log, index) => (
+              <LogRow
+                key={log.id}
+                log={log}
+                index={index}
+                isSelected={selectedIndices.has(index)}
+                onClick={handleRowClick}
+              />
+            ))}
+            <tr ref={bottomRef}></tr>
+          </tbody>
+        </Table>
+      </TableContainer>
+    </WinContainer>
+  );
 };
 
 export default DebugLogWindow;

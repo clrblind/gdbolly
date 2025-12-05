@@ -23,8 +23,7 @@ const initialState = {
     // Windows Management
 
     // Windows Management
-    showSystemLog: false,
-    showDebugLog: false,
+    // Legacy view control - moved to windowsSlice
 
     // View Control
     viewStartAddress: null,
@@ -161,12 +160,6 @@ export const debuggerSlice = createSlice({
         clearSystemLogs: (state) => {
             state.systemLogs = [];
         },
-        toggleSystemLogWindow: (state, action) => {
-            state.showSystemLog = action.payload !== undefined ? action.payload : !state.showSystemLog;
-        },
-        toggleDebugLogWindow: (state, action) => {
-            state.showDebugLog = action.payload !== undefined ? action.payload : !state.showDebugLog;
-        },
         setProgress: (state, action) => {
             state.loadingProgress = action.payload;
         },
@@ -275,7 +268,7 @@ export const debuggerSlice = createSlice({
 export const {
     resetDebuggerState,
     setStatus, setThreadId, updateRegisters, setRegisterNames, updateDisassembly,
-    addSystemLog, addDebugLog, clearSystemLogs, toggleSystemLogWindow, toggleDebugLogWindow, setProgress, setMetadata,
+    addSystemLog, addDebugLog, clearSystemLogs, setProgress, setMetadata,
     selectAddress, toggleAddressSelection, selectAddressRange,
     setUserComment, setComments, updateSettings,
     setViewStartAddress, pushHistory, navigateBack, navigateForward, clearHistory,

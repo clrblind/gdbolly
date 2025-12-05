@@ -175,4 +175,12 @@ async def save_comment(payload: dict = Body(...)):
     if mgr and address:
         await mgr.save_comment(address, comment)
         await broadcast_log(f"Comment saved for {address}: {comment}")
-    return {"status": "saved"}
+@router.post("/session/stop")
+async def stop_session():
+    """Stops the current debug session and unloads the target"""
+    await gdb.stop()
+    set_db_manager(None) # Unload DB manager
+    set_last_opened_path(None) # Clear last opened path so it doesn't auto-load
+    await broadcast_log("Session closed. Target unloaded.")
+    return {"status": "ok"}
+

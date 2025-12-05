@@ -12,6 +12,18 @@
 - **Scrollbars**: Fixed horizontal scrolling issues in Log windows for long lines.
 - **Reliability**: Improved robustness of ImageBase detection and session cleanup.
 
+## [0.1.5] - 2025-12-05
+### Added
+- **UI Enhancements**:
+    - Invisible toolbar separators.
+    - Window resizing by dragging edges/corners.
+    - Advanced text selection in Log windows (Ctrl+A, Ctrl/Shift+Click, Ctrl+C).
+    - Window management buttons (Close/Open/Restart) in Toolbar.
+- **Menu Structure**:
+    - Restructured "View" and "Window" menus.
+    - Moved "System Log" to "View" menu.
+    - Removed redundant window titles in log windows.
+
 ## [0.1.2] - 2025-12-05
 ### Added
 - **UI Enhancements**:

@@ -17,7 +17,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
 
     // 1. Session Logic
     const {
-        targetName, handleSessionLoad, handleFileOpen, handleResetDB
+        targetName, handleSessionLoad, handleFileOpen, handleResetDB, handleCloseTarget
     } = useSessionManager(apiCall);
 
     // Helper for Disassembly
@@ -118,6 +118,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         handleSessionLoad,
         handleFileOpen,
         handleResetDB,
+        handleCloseTarget,
         handleRevert,
         handleCommentOk,
         handleEditOk,

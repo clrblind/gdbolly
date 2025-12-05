@@ -64,10 +64,17 @@ export const useSessionManager = (apiCall) => {
         handleSessionLoad();
     };
 
+    const handleCloseTarget = async () => {
+        dispatch(resetDebuggerState());
+        setTargetName("");
+        await apiCall('/session/stop', {}, 'POST');
+    };
+
     return {
         targetName,
         handleSessionLoad,
         handleFileOpen,
-        handleResetDB
+        handleResetDB,
+        handleCloseTarget
     };
 };
