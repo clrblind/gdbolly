@@ -23,7 +23,7 @@ function App() {
     status, settings, selectedAddresses, showSystemLog,
     currentThreadId, layout, contextMenu, activeModal,
     commentInput, patchInput, fillByte, fillInputRef, targetName,
-    loadingProgress, version,
+    loadingProgress, version, metadata,
 
     // Setters & Handlers
     setContextMenu, setActiveModal, setCommentInput, setPatchInput, setFillByte,
@@ -80,41 +80,69 @@ function App() {
               <VerticalResizer onMouseDown={handleMouseDownVert} />
               <Panel style={{ flex: 1 }}>
                 <div style={{ padding: 5 }}>Stack (Pending...)</div>
-                items={contextMenu.items}
-                onClose={() => setContextMenu(null)}
+              </Panel>
+            </HorizontalSplit>
+          </>
+        )}
+      </Workspace>
+
+      <StatusBar>
+        <div style={{ width: '80px' }}>{status}</div>
+        <div style={{ flex: 1 }}>Target: {targetName || 'None'}</div>
+
+        <div style={{ width: '2px', padding: 0, background: 'transparent', border: 'none' }}></div>
+
+        <div style={{ width: '100px' }}>PID: {loadingProgress.show ? '...' : (metadata?.pid || currentThreadId || '')}</div>
+
+        <div style={{ width: '2px', padding: 0, background: 'transparent', border: 'none' }}></div>
+
+        <div style={{ width: '80px' }}>{metadata?.arch || 'Arch'}</div>
+
+        <div style={{ width: '2px', padding: 0, background: 'transparent', border: 'none' }}></div>
+
+        <div style={{ flex: 1, minWidth: '150px' }}>Base: {metadata?.imageBase || '?'}</div>
+      </StatusBar>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
         />
       )}
 
-                {/* Progress Modal */}
-                {loadingProgress && loadingProgress.show && (
-                  <ProgressModal message={loadingProgress.message} percent={loadingProgress.percent} />
-                )}
+      {/* Progress Modal */}
+      {loadingProgress && loadingProgress.show && (
+        <ProgressModal message={loadingProgress.message} percent={loadingProgress.percent} />
+      )}
 
-                <ModalManager
-                  activeModal={activeModal}
-                  setActiveModal={setActiveModal}
-                  settings={settings}
-                  selectedAddresses={selectedAddresses}
-                  commentInput={commentInput}
-                  setCommentInput={setCommentInput}
-                  handleCommentOk={handleCommentOk}
-                  patchInput={patchInput}
-                  setPatchInput={setPatchInput}
-                  handleEditOk={handleEditOk}
-                  fillByte={fillByte}
-                  setFillByte={setFillByte}
-                  handleFillOk={handleFillOk}
-                  fillInputRef={fillInputRef}
-                  handleGoTo={handleGoTo}
-                  handleResetDB={handleResetDB}
-                  handleFileOpen={handleFileOpen}
-                  saveSetting={saveSetting}
-                  dispatch={dispatch}
-                  apiCall={apiCall}
-                />
+      <ModalManager
+        activeModal={activeModal}
+        setActiveModal={setActiveModal}
+        settings={settings}
+        selectedAddresses={selectedAddresses}
+        commentInput={commentInput}
+        setCommentInput={setCommentInput}
+        handleCommentOk={handleCommentOk}
+        patchInput={patchInput}
+        setPatchInput={setPatchInput}
+        handleEditOk={handleEditOk}
+        fillByte={fillByte}
+        setFillByte={setFillByte}
+        handleFillOk={handleFillOk}
+        fillInputRef={fillInputRef}
+        handleGoTo={handleGoTo}
+        handleResetDB={handleResetDB}
+        handleFileOpen={handleFileOpen}
+        saveSetting={saveSetting}
+        dispatch={dispatch}
+        apiCall={apiCall}
+        targetName={targetName}
+      />
 
-              </MainContainer>
-              );
+    </MainContainer>
+  );
 }
 
-              export default App;
+export default App;

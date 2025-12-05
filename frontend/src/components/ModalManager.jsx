@@ -14,7 +14,8 @@ const ModalManager = ({
     handleGoTo, handleResetDB, handleFileOpen,
     saveSetting,
     dispatch,
-    apiCall
+    apiCall,
+    targetName
 }) => {
 
     const handleSaveSetting = (k, v) => {
@@ -90,7 +91,7 @@ const ModalManager = ({
 
             {activeModal === 'confirm_reset' && (
                 <XPModal title="Confirm" onClose={() => setActiveModal(null)} onOk={() => { handleResetDB(); setActiveModal(null); }}>
-                    <div>Are you sure you want to delete the database and all analysis data?</div>
+                    <div>Are you sure you want to delete the database and all analysis data for <b>{targetName}</b>?</div>
                 </XPModal>
             )}
         </>

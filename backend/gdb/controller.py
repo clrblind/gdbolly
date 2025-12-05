@@ -345,11 +345,31 @@ class GDBController:
                 elif '4' in size: metadata['arch'] = 'x86'
 
             # Image Base
-            # Try specific symbol that usually points to base
-            res = await self.execute_command("-data-evaluate-expression (void*)&__executable_start")
-            if res and 'value' in res:
-                val = res['value'].split(' ')[0] # "0x08048000 <__executable_start>"
-                metadata['imageBase'] = val
+            # Strategy 1: Try reading /proc/{pid}/maps if we have a PID
+            if metadata['pid']:
+                try:
+                    with open(f"/proc/{metadata['pid']}/maps", 'r') as f:
+                        # Read first line
+                        first_line = f.readline()
+                        if first_line:
+                            # Format: 08048000-08049000 r-xp 00000000 08:01 123456 /path/to/binary
+                            parts = first_line.split()
+                            if len(parts) > 0:
+                                range_part = parts[0]
+                                start_addr = range_part.split('-')[0]
+                                metadata['imageBase'] = f"0x{start_addr}"
+                except Exception as e:
+                    await self.log(f"Maps fetch error: {e}")
+
+            # Strategy 2: Fallback to symbol if maps failed
+            if not metadata['imageBase']:
+                try:
+                     res = await self.execute_command("-data-evaluate-expression (void*)&__executable_start")
+                     if res and 'value' in res:
+                         val = res['value'].split(' ')[0] # "0x08048000 <__executable_start>"
+                         metadata['imageBase'] = val
+                except:
+                     pass
             
         except Exception as e:
             await self.log(f"Metadata fetch error: {e}")

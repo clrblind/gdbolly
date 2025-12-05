@@ -53,7 +53,7 @@ const ProgressBarContainer = styled.div`
 const ProgressBarFill = styled.div`
   height: 100%;
   background: #000080;
-  width: ${props => props.percent}%;
+  width: ${props => props.$percent}%;
   transition: width 0.3s ease-in-out;
 `;
 
@@ -62,19 +62,19 @@ const Message = styled.div`
 `;
 
 const ProgressModal = ({ message, percent }) => {
-    return (
-        <Overlay>
-            <ModalWindow>
-                <TitleBar>Loading...</TitleBar>
-                <Content>
-                    <Message>{message}</Message>
-                    <ProgressBarContainer>
-                        <ProgressBarFill percent={percent} />
-                    </ProgressBarContainer>
-                </Content>
-            </ModalWindow>
-        </Overlay>
-    );
+  return (
+    <Overlay>
+      <ModalWindow>
+        <TitleBar>Loading...</TitleBar>
+        <Content>
+          <Message>{message}</Message>
+          <ProgressBarContainer>
+            <ProgressBarFill $percent={percent} />
+          </ProgressBarContainer>
+        </Content>
+      </ModalWindow>
+    </Overlay>
+  );
 };
 
 export default ProgressModal;

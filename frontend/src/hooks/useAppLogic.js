@@ -26,6 +26,7 @@ export const useAppLogic = () => {
     const registers = useSelector(state => state.debug.registers);
     const viewStartAddress = useSelector(state => state.debug.viewStartAddress);
     const loadingProgress = useSelector(state => state.debug.loadingProgress);
+    const metadata = useSelector(state => state.debug.metadata);
     const [version, setVersion] = useState("0.0.0");
 
     // Layout
@@ -116,7 +117,7 @@ export const useAppLogic = () => {
         status, settings, selectedAddresses, showSystemLog,
         currentThreadId, layout, contextMenu, activeModal,
         commentInput, patchInput, fillByte, fillInputRef, targetName,
-        loadingProgress, version,
+        loadingProgress, version, metadata,
 
         // Setters
         setContextMenu, setActiveModal, setCommentInput, setPatchInput, setFillByte,
