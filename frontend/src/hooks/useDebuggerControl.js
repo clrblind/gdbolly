@@ -12,18 +12,29 @@ export const useDebuggerControl = (apiCall, setActiveModal) => {
 
     const getCurrentIP = () => {
         // 1. Try by name (Most reliable)
-        const named = registers.find(r => r.name === 'rip' || r.name === 'eip');
-        if (named) return normalizeAddress(named.value);
+        const rip = registers.find(r => r.name === 'rip');
+        if (rip) return normalizeAddress(rip.value);
 
-        // 2. Fallback by number
-        // Check 16 (RIP) first, as 8 (R8) exists in 64-bit and is NOT IP.
-        // In 32-bit, 16 might be st0, so this is risky without names, 
-        // but names should always be available now.
-        const r16 = registers.find(r => r.number === '16');
-        if (r16) return normalizeAddress(r16.value);
+        const eip = registers.find(r => r.name === 'eip');
+        if (eip) return normalizeAddress(eip.value);
 
-        const r8 = registers.find(r => r.number === '8');
-        if (r8) return normalizeAddress(r8.value);
+        // Debug logging
+        if (registers.length > 0) {
+            console.log("getCurrentIP: IP not found by name. Registers:", registers);
+            console.log("Has Names:", registers.some(r => r.name));
+        }
+
+        // 2. Fallback by number ONLY if names are missing
+        // If we have names, we should have found it above.
+        // Checking '16' blindly is dangerous in 32-bit where 16 is st0.
+        const hasNames = registers.some(r => r.name);
+        if (!hasNames) {
+            const r16 = registers.find(r => r.number === '16');
+            if (r16) return normalizeAddress(r16.value);
+
+            const r8 = registers.find(r => r.number === '8'); // Fallback for 32-bit if no names
+            if (r8) return normalizeAddress(r8.value);
+        }
 
         return null;
     };

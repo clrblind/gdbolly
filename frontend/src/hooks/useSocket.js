@@ -17,10 +17,14 @@ export const useSocket = () => {
     ws.current.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        // console.log("WS RX:", msg.type, msg.payload); // Debug Log
         if (msg.type === 'status') dispatch(setStatus(msg.payload));
         if (msg.type === 'thread-update') dispatch(setThreadId(msg.payload));
         if (msg.type === 'registers') dispatch(updateRegisters(msg.payload));
-        if (msg.type === 'register_names') dispatch(setRegisterNames(msg.payload));
+        if (msg.type === 'register_names') {
+          console.log("WS RX: register_names received", msg.payload);
+          dispatch(setRegisterNames(msg.payload));
+        }
         if (msg.type === 'disassembly') dispatch(updateDisassembly(msg.payload));
         if (msg.type === 'system_log') dispatch(addSystemLog(`[LOG] ${msg.payload}`));
       } catch (e) {

@@ -3,9 +3,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
 import { useSelector, useDispatch } from 'react-redux';
-import { 
-    selectAddress, toggleAddressSelection, selectAddressRange, 
-    pushHistory, setViewStartAddress 
+import {
+  selectAddress, toggleAddressSelection, selectAddressRange,
+  pushHistory, setViewStartAddress
 } from '../store/debuggerSlice';
 import { parseInstruction } from '../utils/asmFormatter';
 import { offsetAddress, normalizeAddress } from '../utils/addressUtils';
@@ -83,13 +83,16 @@ const DisassemblyPane = ({ onContextMenu }) => {
   const registers = useSelector(state => state.debug.registers);
   const modifiedAddresses = useSelector(state => state.debug.modifiedAddresses);
   const viewStartAddress = useSelector(state => state.debug.viewStartAddress);
-  
-  const ripReg = registers.find(r => r.number === '16' || r.number === 'rip' || r.number === 'eip'); 
+
+  // Prioritize finding by name to avoid 32-bit/64-bit number collisions
+  const ripReg = registers.find(r => r.name === 'rip') ||
+    registers.find(r => r.name === 'eip') ||
+    (!registers.some(r => r.name) && registers.find(r => r.number === '16')); // Fallback only if no names
   const currentIP = ripReg ? normalizeAddress(ripReg.value) : null;
 
-  const [colWidths, setColWidths] = useState([140, 160, 680, 180]); 
+  const [colWidths, setColWidths] = useState([140, 160, 680, 180]);
   const headers = ['Address', 'Hex dump', 'Disassembly', 'Comment'];
-  
+
   const resizingRef = useRef(null);
   const [resizeTooltip, setResizeTooltip] = useState(null);
   const containerRef = useRef(null);
@@ -132,114 +135,114 @@ const DisassemblyPane = ({ onContextMenu }) => {
   }, [instructions]);
 
   const handleScroll = (e) => {
-      const el = e.target;
-      if (isFetchingRef.current) return;
-      if (instructions.length === 0) return;
+    const el = e.target;
+    if (isFetchingRef.current) return;
+    if (instructions.length === 0) return;
 
-      if (el.scrollTop < 10) {
-          // Scrolled to top, try to fetch previous
-          isFetchingRef.current = true;
-          const prev = offsetAddress(instructions[0].address, -64); // ~16 instructions
-          dispatch(setViewStartAddress(prev));
-      } else if (el.scrollHeight - el.scrollTop - el.clientHeight < 10) {
-          // Scrolled to bottom
-          isFetchingRef.current = true;
-          // Jump view start to the end to simulate paging down
-          const next = instructions[Math.max(0, instructions.length - 5)].address;
-          dispatch(setViewStartAddress(next));
-      }
+    if (el.scrollTop < 10) {
+      // Scrolled to top, try to fetch previous
+      isFetchingRef.current = true;
+      const prev = offsetAddress(instructions[0].address, -64); // ~16 instructions
+      dispatch(setViewStartAddress(prev));
+    } else if (el.scrollHeight - el.scrollTop - el.clientHeight < 10) {
+      // Scrolled to bottom
+      isFetchingRef.current = true;
+      // Jump view start to the end to simulate paging down
+      const next = instructions[Math.max(0, instructions.length - 5)].address;
+      dispatch(setViewStartAddress(next));
+    }
   };
 
   const handleKeyDown = (e) => {
-      // Allow moving selection with arrows
-      if (selectedAddresses.length === 0 && instructions.length > 0) return;
-      
-      const currentAddr = lastSelected || selectedAddresses[0];
-      const idx = instructions.findIndex(i => i.address === currentAddr);
-      
-      if (idx === -1) return;
+    // Allow moving selection with arrows
+    if (selectedAddresses.length === 0 && instructions.length > 0) return;
 
-      if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          if (idx < instructions.length - 1) {
-              const next = instructions[idx + 1].address;
-              dispatch(selectAddress(next));
-          }
-      } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          if (idx > 0) {
-              const prev = instructions[idx - 1].address;
-              dispatch(selectAddress(prev));
-          }
+    const currentAddr = lastSelected || selectedAddresses[0];
+    const idx = instructions.findIndex(i => i.address === currentAddr);
+
+    if (idx === -1) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (idx < instructions.length - 1) {
+        const next = instructions[idx + 1].address;
+        dispatch(selectAddress(next));
       }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (idx > 0) {
+        const prev = instructions[idx - 1].address;
+        dispatch(selectAddress(prev));
+      }
+    }
   };
 
   const handleMouseDown = (addr, idx, e) => {
-      if (e.button !== 0) return; 
-      isSelecting.current = true;
-      selectionStartIdx.current = idx;
-      
-      if (e.ctrlKey) {
-        dispatch(toggleAddressSelection(addr));
-      } else if (e.shiftKey && lastSelected) {
-        handleShiftClick(idx);
-      } else {
-        dispatch(selectAddress(addr));
-      }
+    if (e.button !== 0) return;
+    isSelecting.current = true;
+    selectionStartIdx.current = idx;
+
+    if (e.ctrlKey) {
+      dispatch(toggleAddressSelection(addr));
+    } else if (e.shiftKey && lastSelected) {
+      handleShiftClick(idx);
+    } else {
+      dispatch(selectAddress(addr));
+    }
   };
 
   const handleMouseEnter = (addr, idx) => {
-      if (isSelecting.current) {
-          const start = selectionStartIdx.current;
-          const end = idx;
-          const low = Math.min(start, end);
-          const high = Math.max(start, end);
-          
-          const range = instructions.slice(low, high + 1).map(i => i.address);
-          dispatch(selectAddressRange(range));
-      }
+    if (isSelecting.current) {
+      const start = selectionStartIdx.current;
+      const end = idx;
+      const low = Math.min(start, end);
+      const high = Math.max(start, end);
+
+      const range = instructions.slice(low, high + 1).map(i => i.address);
+      dispatch(selectAddressRange(range));
+    }
   };
 
   const handleMouseUp = () => {
-      isSelecting.current = false;
+    isSelecting.current = false;
   };
 
   const handleShiftClick = (index) => {
-      const lastIdx = instructions.findIndex(i => i.address === lastSelected);
-      if (lastIdx !== -1) {
-          const start = Math.min(lastIdx, index);
-          const end = Math.max(lastIdx, index);
-          const range = instructions.slice(start, end + 1).map(i => i.address);
-          dispatch(selectAddressRange(range));
-      }
+    const lastIdx = instructions.findIndex(i => i.address === lastSelected);
+    if (lastIdx !== -1) {
+      const start = Math.min(lastIdx, index);
+      const end = Math.max(lastIdx, index);
+      const range = instructions.slice(start, end + 1).map(i => i.address);
+      dispatch(selectAddressRange(range));
+    }
   };
 
   const handleRightClick = (e, inst) => {
     e.preventDefault();
     if (!selectedAddresses.includes(inst.address)) {
-        dispatch(selectAddress(inst.address));
+      dispatch(selectAddress(inst.address));
     }
     if (onContextMenu) onContextMenu(e, inst);
   };
 
   const handleDoubleClick = (inst, parsed) => {
-      const parts = parsed.operands.split(',');
-      for (let part of parts) {
-          const clean = part.trim();
-          if (clean.match(/^0x[0-9a-fA-F]+$/)) {
-              dispatch(pushHistory(instructions[0].address)); 
-              dispatch(setViewStartAddress(clean));
-              return;
-          }
+    const parts = parsed.operands.split(',');
+    for (let part of parts) {
+      const clean = part.trim();
+      if (clean.match(/^0x[0-9a-fA-F]+$/)) {
+        dispatch(pushHistory(instructions[0].address));
+        dispatch(setViewStartAddress(clean));
+        return;
       }
+    }
   };
 
   return (
-    <PaneContainer 
-        tabIndex="0" 
-        onKeyDown={handleKeyDown}
-        onMouseUp={handleMouseUp} 
-        onMouseLeave={handleMouseUp}
+    <PaneContainer
+      tabIndex="0"
+      onKeyDown={handleKeyDown}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
     >
       <HeaderRow>
         {headers.map((title, idx) => (
@@ -249,56 +252,56 @@ const DisassemblyPane = ({ onContextMenu }) => {
           </HeaderCell>
         ))}
       </HeaderRow>
-      
+
       <ContentArea ref={containerRef} onScroll={handleScroll}>
         {instructions.map((inst, idx) => {
           const normAddr = normalizeAddress(inst.address);
           const isCurrentIP = normAddr === currentIP;
           const isSelected = selectedAddresses.includes(normAddr);
-          
+
           // Check if ANY byte in this instruction range is modified
           let isModified = false;
           // Rough estimation of length based on hex dump
-          const len = inst.opcodes ? inst.opcodes.split(' ').filter(x=>x).length : 1;
-          for(let i=0; i<len; i++) {
-              if (modifiedAddresses.includes(offsetAddress(normAddr, i))) {
-                  isModified = true;
-                  break;
-              }
+          const len = inst.opcodes ? inst.opcodes.split(' ').filter(x => x).length : 1;
+          for (let i = 0; i < len; i++) {
+            if (modifiedAddresses.includes(offsetAddress(normAddr, i))) {
+              isModified = true;
+              break;
+            }
           }
-          
+
           const parsed = parseInstruction(inst, settings);
-          
+
           let displayComment = userComments[normAddr];
           if (!displayComment && settings.showGdbComments && parsed.gdbComment) {
-             displayComment = parsed.gdbComment;
+            displayComment = parsed.gdbComment;
           }
 
           return (
-            <DisassemblyRow 
-                key={inst.address}
-                inst={inst}
-                parsed={parsed}
-                colWidths={colWidths}
-                isCurrent={isCurrentIP}
-                isSelected={isSelected}
-                isModified={isModified}
-                comment={displayComment}
-                onClick={(e) => {}} 
-                onMouseDown={(e) => handleMouseDown(normAddr, idx, e)}
-                onMouseEnter={() => handleMouseEnter(normAddr, idx)}
-                onContextMenu={(e) => handleRightClick(e, inst)}
-                onDoubleClick={() => handleDoubleClick(inst, parsed)}
-                onMouseUp={handleMouseUp}
+            <DisassemblyRow
+              key={inst.address}
+              inst={inst}
+              parsed={parsed}
+              colWidths={colWidths}
+              isCurrent={isCurrentIP}
+              isSelected={isSelected}
+              isModified={isModified}
+              comment={displayComment}
+              onClick={(e) => { }}
+              onMouseDown={(e) => handleMouseDown(normAddr, idx, e)}
+              onMouseEnter={() => handleMouseEnter(normAddr, idx)}
+              onContextMenu={(e) => handleRightClick(e, inst)}
+              onDoubleClick={() => handleDoubleClick(inst, parsed)}
+              onMouseUp={handleMouseUp}
             />
           );
         })}
       </ContentArea>
 
       {resizeTooltip && (
-          <ResizeTooltip style={{top: resizeTooltip.y, left: resizeTooltip.x}}>
-              Width: {resizeTooltip.width}px
-          </ResizeTooltip>
+        <ResizeTooltip style={{ top: resizeTooltip.y, left: resizeTooltip.x }}>
+          Width: {resizeTooltip.width}px
+        </ResizeTooltip>
       )}
     </PaneContainer>
   );

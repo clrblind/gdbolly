@@ -3,8 +3,9 @@ services:
     build: ./backend
     container_name: olly_backend
     volumes:
-      - ./targets:/targets  # Прокидываем папку с бинарниками внутрь
+      - ./targets:/targets # Прокидываем папку с бинарниками внутрь
       - ./database:/app/database # БД для сохранения состояния
+      - ./backend:/app # Mount source code for hot-reload
     cap_add:
       - SYS_PTRACE
     security_opt:

@@ -3,6 +3,7 @@
 import asyncio
 import os
 import uuid
+import random
 from pygdbmi.gdbmiparser import parse_response
 
 class GDBController:
@@ -15,6 +16,35 @@ class GDBController:
     async def log(self, msg: str):
         """Internal logging helper"""
         await self.msg_queue.put({"type": "system_log", "payload": f"[GDB-CTRL] {msg}"})
+
+    async def execute_command(self, cmd: str, timeout: float = 2.0) -> dict:
+        """
+        Executes a command synchronously (waits for result).
+        Returns the payload dict or raises Exception/TimeoutError.
+        """
+        if not self.process:
+            raise Exception("GDB not running")
+
+        # GDB MI tokens must be digits ONLY.
+        token = str(random.randint(100000, 999999))
+        future = asyncio.get_event_loop().create_future()
+        self.callbacks[token] = future
+
+        # Command format: [TOKEN]-command
+        full_cmd = f"{token}{cmd}"
+        
+        try:
+            await self.log(f"TX: {cmd}")
+            # Write to stdin
+            self.process.stdin.write(f"{full_cmd}\n".encode())
+            await self.process.stdin.drain()
+            
+            # Wait for response
+            payload = await asyncio.wait_for(future, timeout=timeout)
+            return payload
+        finally:
+            if token in self.callbacks:
+                del self.callbacks[token]
 
     async def start(self, binary_path: str):
         await self.stop()
@@ -36,25 +66,33 @@ class GDBController:
         self.io_task = asyncio.create_task(self._read_stdout(self.process))
 
         # Use starti to stop at entry point immediately (works for stripped binaries)
+        # We don't need to wait for this one strictly, but it's good practice
         await self.send_command("-interpreter-exec console \"starti\"")
         
         # Try to break at main for convenience
         try:
-            res = await self.send_command("-break-insert main")
+            # NOW using execute_command to actually wait for the result!
+            res = await self.execute_command("-break-insert main")
             # If successful (and we have a breakpoint), continue to main
-            if res and 'payload' in res and 'bkpt' in res['payload']:
+            if res and 'bkpt' in res:
                  await self.send_command("-exec-continue")
-        except Exception:
-            # Main not found, stay at entry point
-            await self.log("Main function not found, stopped at entry point")
+        except Exception as e:
+            # Main not found or other error, stay at entry point
+            await self.log(f"Main start skipped: {e}")
 
         # Fetch register names map
-        res = await self.send_command("-data-list-register-names")
-        if res and 'payload' in res and 'register-names' in res['payload']:
-            await self.msg_queue.put({
-                "type": "register_names", 
-                "payload": res['payload']['register-names']
-            })
+        try:
+            # NOW using execute_command to get the names!
+            res = await self.execute_command("-data-list-register-names")
+            if res and 'register-names' in res:
+                names = res['register-names']
+                await self.log(f"Fetching register names success: found {len(names)} names")
+                await self.msg_queue.put({
+                    "type": "register_names", 
+                    "payload": names
+                })
+        except Exception as e:
+            await self.log(f"Failed to fetch register names: {e}")
 
     async def stop(self):
         self.callbacks.clear()
@@ -81,6 +119,7 @@ class GDBController:
         await self.msg_queue.put({"type": "status", "payload": "IDLE"})
 
     async def send_command(self, cmd: str):
+        """Fire and forget command (or for legacy compatibility)"""
         if not self.process:
             return
         
@@ -110,43 +149,24 @@ class GDBController:
         if not hex_data:
             return False
 
-        token = str(uuid.uuid4().hex)
-        future = asyncio.get_event_loop().create_future()
-        self.callbacks[token] = future
-
-        cmd = f"{token}-data-write-memory-bytes {address} {hex_data}"
+        cmd = f"-data-write-memory-bytes {address} {hex_data}"
         
         try:
-            await self.log(f"WriteMem TX: {address} val={hex_data}")
-            await self.send_command(cmd)
-            # Increased timeout for safety
-            await asyncio.wait_for(future, timeout=4.0)
+            await self.execute_command(cmd, timeout=4.0)
             await self.log(f"WriteMem Success: {address}")
             return True
-        except asyncio.TimeoutError:
-            await self.log(f"WriteMem Timeout: {address}")
-            return False
         except Exception as e:
             await self.log(f"WriteMem Failed: {e}")
             return False
-        finally:
-            if token in self.callbacks:
-                del self.callbacks[token]
 
     async def read_memory(self, address: str, length: int):
         """Reads memory bytes. Returns list of ints or None."""
         if not self.process: return None
         
-        token = str(uuid.uuid4().hex)
-        future = asyncio.get_event_loop().create_future()
-        self.callbacks[token] = future
-        
-        cmd = f"{token}-data-read-memory-bytes {address} {length}"
+        cmd = f"-data-read-memory-bytes {address} {length}"
         
         try:
-            await self.log(f"ReadMem TX: {address} len={length}")
-            await self.send_command(cmd)
-            payload = await asyncio.wait_for(future, timeout=4.0)
+            payload = await self.execute_command(cmd, timeout=4.0)
             
             # Payload example: {'memory': [{'begin': '0x...', 'offset': '0x...', 'end': '0x...', 'contents': '4883ec08'}]}
             memory = payload.get('memory', [])
@@ -160,9 +180,6 @@ class GDBController:
         except Exception as e:
             await self.log(f"ReadMem Error: {e}")
             return None
-        finally:
-            if token in self.callbacks:
-                del self.callbacks[token]
 
     async def _read_stdout(self, process_instance):
         """Main IO Loop with fixed parsing logic"""
@@ -183,6 +200,9 @@ class GDBController:
                     continue
                 
                 token = parsed.get('token')
+                if token is not None:
+                    token = str(token)
+
                 msg_type = parsed.get('type')     # 'result', 'notify', 'console', 'log', 'output'
                 payload = parsed.get('payload') or {}  # Ensure payload is always a dict, not None
                 

@@ -2,6 +2,17 @@
 
 # Changelog
 
+## [0.1.1] - 2025-12-05
+### Critical Fixes
+- **GDB Initialization**: 
+    - Fixed a critical race condition where "register names" were never received by the frontend, causing registers to display with 64-bit fallbacks (RAX vs EAX) and breaking "Jump to RIP" functionality.
+    - Implemented a robust synchronous `execute_command` in `gdb_controller` that uses numeric tokens to pair GDB MI requests with responses.
+- **Development Environment**: 
+    - Fixed `docker-compose.yml` to correctly mount the `backend` code directory. Previously, code changes were not being hot-reloaded or applied due to missing volume mounts.
+- **Frontend State**:
+    - `RegistersPane.jsx` now correctly uses dynamic register names from the backend instead of hardcoded defaults.
+    - Added extensive logging to WebSocket and GDB Controller to trace data flow issues.
+
 ## [0.1.0] - 2025-12-04
 ### Added
 - **File Browser**: Добавлено модальное окно "File -> Open" для выбора файлов из директории `/targets`

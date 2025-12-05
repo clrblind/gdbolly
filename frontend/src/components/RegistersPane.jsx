@@ -28,7 +28,7 @@ const RegistersPane = () => {
     <div style={{ padding: '5px' }}>
       {regs.map((r) => (
         <RegRow key={r.number}>
-          <RegName>{REG_NAMES[r.number] || `r${r.number}`}</RegName>
+          <RegName>{r.name || REG_NAMES[r.number] || `r${r.number}`}</RegName>
           <RegVal>{r.value}</RegVal>
         </RegRow>
       ))}
