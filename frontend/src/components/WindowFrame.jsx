@@ -111,7 +111,7 @@ const WindowFrame = ({ windowState, isActive, children }) => {
     const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0, startX: 0, startY: 0 });
 
     // Viewport bounds (toolbar ~30px, statusbar ~22px)
-    const TOOLBAR_HEIGHT = 48;
+    const TOOLBAR_HEIGHT = 98;
     const STATUSBAR_HEIGHT = 22;
     const MIN_WINDOW_SIZE = { w: 200, h: 100 };
 

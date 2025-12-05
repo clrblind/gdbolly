@@ -12,7 +12,8 @@ const Bar = styled.div`
   font-size: 12px;
   user-select: none;
   flex-shrink: 0;
-  z-index: 100;
+  position: relative;
+  z-index: 999998;
 `;
 
 const MenuList = styled.div`
@@ -53,6 +54,15 @@ const DropdownItem = styled.div`
     background-color: #000080;
     color: white;
   }
+`;
+
+const DropdownItemDisabled = styled.div`
+  padding: 4px 10px;
+  cursor: default;
+  color: #999;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
 `;
 
 const SubMenu = styled(MenuList)`
@@ -98,7 +108,7 @@ const ControlBtn = styled.button`
   }
 `;
 
-const MainMenu = ({ handleSessionLoad, setActiveModal, openLogWindow, openDebugLogWindow, focusDisassembly, version }) => {
+const MainMenu = ({ handleSessionLoad, setActiveModal, openLogWindow, openDebugLogWindow, focusDisassembly, version, targetName }) => {
   const dispatch = useDispatch();
   const windows = useSelector(state => state.windows.windows);
   const activeWindowId = useSelector(state => state.windows.activeWindowId);
@@ -149,7 +159,11 @@ const MainMenu = ({ handleSessionLoad, setActiveModal, openLogWindow, openDebugL
           <DropdownItemWithSub>
             Database <Arrow>▶</Arrow>
             <SubMenu>
-              <DropdownItem onClick={() => onItemClick(() => setActiveModal('confirm_reset'))}>Remove DB</DropdownItem>
+              {targetName ? (
+                <DropdownItem onClick={() => onItemClick(() => setActiveModal('confirm_reset'))}>Remove DB</DropdownItem>
+              ) : (
+                <DropdownItemDisabled>Remove DB</DropdownItemDisabled>
+              )}
             </SubMenu>
           </DropdownItemWithSub>
         </MenuList>

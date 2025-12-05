@@ -9,6 +9,12 @@ export const useSessionManager = (apiCall) => {
     const [targetName, setTargetName] = useState("");
 
     const handleSessionLoad = async () => {
+        // Only reload if we have a target loaded
+        if (!targetName) {
+            dispatch(addSystemLog({ message: 'No target loaded. Please open a file first.', type: 'warning' }));
+            return;
+        }
+
         dispatch(resetDebuggerState());
         const data = await apiCall('/session/load', {}, 'POST');
         if (data) {

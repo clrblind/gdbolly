@@ -12,6 +12,20 @@
 - **Scrollbars**: Fixed horizontal scrolling issues in Log windows for long lines.
 - **Reliability**: Improved robustness of ImageBase detection and session cleanup.
 
+## [0.1.6] - 2025-12-05
+### Fixed
+- **Window Management**:
+    - Corrected window boundary constraints (50px adjustment for toolbar height).
+    - Fixed menu z-index to ensure dropdowns always appear above windows.
+- **File Browser**:
+    - Info panel now always visible with file type information from `file` command.
+    - Increased modal width to accommodate additional info.
+- **Session Management**:
+    - Fixed hardcoded path bug in "Restart target" - now checks if target is loaded.
+    - "Remove DB" menu item disabled when no target loaded.
+- **Docker**:
+    - Reduced backend container shutdown time from 10s to 1s via `stop_grace_period`.
+
 ## [0.1.5] - 2025-12-05
 ### Added
 - **UI Enhancements**:

@@ -30,9 +30,10 @@ const InfoText = styled.div`
   margin-top: 8px;
   font-size: 11px;
   color: #333;
-  padding: 4px;
+  padding: 6px;
   background: #f0f0f0;
   border: 1px solid #ccc;
+  min-height: 80px;
 `;
 
 const FileBrowserModal = ({ onClose, onSelectFile, apiCall }) => {
@@ -78,7 +79,7 @@ const FileBrowserModal = ({ onClose, onSelectFile, apiCall }) => {
             onOk={handleOk}
             okDisabled={!selected}
         >
-            <div style={{ width: '450px' }}>
+            <div style={{ width: '550px' }}>
                 <div style={{ marginBottom: '8px', fontSize: '12px' }}>
                     <strong>Directory:</strong> /targets
                 </div>
@@ -105,17 +106,26 @@ const FileBrowserModal = ({ onClose, onSelectFile, apiCall }) => {
                         )}
                     </FileList>
                 )}
-                {selected && (
-                    <InfoText>
-                        <strong>Selected:</strong> {selected.name}<br />
-                        <strong>Size:</strong> {(selected.size / 1024).toFixed(1)} KB
-                        {!selected.executable && (
-                            <div style={{ color: '#cc6600', marginTop: '4px' }}>
-                                ⚠ Warning: File is not marked as executable
-                            </div>
-                        )}
-                    </InfoText>
-                )}
+                <InfoText>
+                    {selected ? (
+                        <>
+                            <strong>Selected:</strong> {selected.name}<br />
+                            <strong>Size:</strong> {(selected.size / 1024).toFixed(1)} KB<br />
+                            {selected.fileType && (
+                                <>
+                                    <strong>Info:</strong> {selected.fileType}<br />
+                                </>
+                            )}
+                            {!selected.executable && (
+                                <div style={{ color: '#cc6600', marginTop: '4px' }}>
+                                    ⚠ Warning: File is not marked as executable
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div style={{ color: '#666' }}>Select a file to view details</div>
+                    )}
+                </InfoText>
             </div>
         </XPModal>
     );

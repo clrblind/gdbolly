@@ -26,10 +26,29 @@ async def list_targets():
             item_path = os.path.join(targets_dir, item)
             if os.path.isfile(item_path):
                 stat_info = os.stat(item_path)
+                
+                # Get file type info using `file` command
+                file_type = ""
+                try:
+                    import subprocess
+                    result = subprocess.run(['file', item_path], capture_output=True, text=True, timeout=2)
+                    if result.returncode == 0:
+                        # Parse output: "path: ELF 64-bit LSB executable, x86-64, ..."
+                        output = result.stdout.strip()
+                        if ':' in output:
+                            file_type = output.split(':', 1)[1].strip()
+                            # Extract just the key parts (e.g., "ELF 64-bit LSB executable, x86-64")
+                            parts = file_type.split(',')
+                            if len(parts) >= 2:
+                                file_type = ', '.join(parts[:2])
+                except Exception:
+                    file_type = ""
+                
                 files.append({
                     "name": item,
                     "size": stat_info.st_size,
-                    "executable": os.access(item_path, os.X_OK)
+                    "executable": os.access(item_path, os.X_OK),
+                    "fileType": file_type
                 })
     except Exception as e:
         await broadcast_log(f"Error listing targets: {e}")

@@ -13,6 +13,7 @@ services:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
+    stop_grace_period: 1s
     stdin_open: true
     tty: true
 

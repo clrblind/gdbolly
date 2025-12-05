@@ -42,21 +42,22 @@ function App() {
       <MainMenu
         handleSessionLoad={handleSessionLoad}
         setActiveModal={setActiveModal}
-
         openLogWindow={openLogWindow}
         openDebugLogWindow={openDebugLogWindow}
         focusDisassembly={focusDisassembly}
         version={version}
+        targetName={targetName}
       />
 
       <MainToolbar
         handleSessionLoad={handleSessionLoad}
-        handleFileOpen={() => setActiveModal('file_browser')}
+        handleFileOpen={handleFileOpen}
         handleCloseTarget={handleCloseTarget}
         handleStep={handleStep}
         apiCall={apiCall}
         openLogWindow={openLogWindow}
         openDebugLogWindow={openDebugLogWindow}
+        focusDisassembly={focusDisassembly}
         setActiveModal={setActiveModal}
       />
 
@@ -169,7 +170,7 @@ function App() {
         targetName={targetName}
       />
 
-    </MainContainer >
+    </MainContainer>
   );
 }
 
