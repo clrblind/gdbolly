@@ -6,7 +6,7 @@ const initialState = {
         // Example: 'cpu': { id: 'cpu', title: 'CPU', x: 0, y: 0, w: 600, h: 400, z: 1, maximized: false, closed: false }
         'cpu': { id: 'cpu', title: 'CPU', x: 20, y: 20, w: 800, h: 500, z: 10, maximized: false, closed: false },
         'logs': { id: 'logs', title: 'System Logs', x: 40, y: 40, w: 600, h: 300, z: 11, maximized: false, closed: true },
-        'debug_log': { id: 'debug_log', title: 'Target Output', x: 60, y: 60, w: 600, h: 300, z: 12, maximized: false, closed: true },
+        'debug_log': { id: 'debug_log', title: 'Log', x: 60, y: 60, w: 600, h: 300, z: 12, maximized: false, closed: true },
     },
     activeWindowId: null,
     maxZ: 100,

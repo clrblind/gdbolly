@@ -60,16 +60,42 @@ const Content = styled.div`
   position: relative;
 `;
 
+// Resize handles for all edges
 const ResizeHandle = styled.div`
   position: absolute;
-  width: 10px;
-  height: 10px;
-  bottom: 0;
-  right: 0;
-  cursor: se-resize;
+  ${props => props.$type === 'corner' ? `
+    width: 10px;
+    height: 10px;
+    bottom: 0;
+    right: 0;
+    cursor: se-resize;
+    background: linear-gradient(135deg, transparent 50%, #808080 50%);
+  ` : props.$type === 'right' ? `
+    width: 4px;
+    height: 100%;
+    right: 0;
+    top: 0;
+    cursor: e-resize;
+  ` : props.$type === 'bottom' ? `
+    width: 100%;
+    height: 4px;
+    bottom: 0;
+    left: 0;
+    cursor: s-resize;
+  ` : props.$type === 'left' ? `
+    width: 4px;
+    height: 100%;
+    left: 0;
+    top: 0;
+    cursor: w-resize;
+  ` : props.$type === 'top' ? `
+    width: 100%;
+    height: 4px;
+    top: 0;
+    left: 0;
+    cursor: n-resize;
+  ` : ''}
   z-index: 100;
-  /* Minimal grip visual */
-  background: linear-gradient(135deg, transparent 50%, #808080 50%);
 `;
 
 const WindowFrame = ({ windowState, isActive, children }) => {
@@ -81,8 +107,13 @@ const WindowFrame = ({ windowState, isActive, children }) => {
     const dragOffset = useRef({ x: 0, y: 0 });
 
     // Resizing Logic
-    const [isResizing, setIsResizing] = useState(false);
-    const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
+    const [resizeState, setResizeState] = useState(null);
+    const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0, startX: 0, startY: 0 });
+
+    // Viewport bounds (toolbar ~30px, statusbar ~22px)
+    const TOOLBAR_HEIGHT = 48;
+    const STATUSBAR_HEIGHT = 22;
+    const MIN_WINDOW_SIZE = { w: 200, h: 100 };
 
     const handleMouseDown = (e) => {
         if (e.button !== 0) return;
@@ -95,15 +126,17 @@ const WindowFrame = ({ windowState, isActive, children }) => {
         e.preventDefault();
     };
 
-    const handleResizeMouseDown = (e) => {
+    const handleResizeMouseDown = (type) => (e) => {
         if (e.button !== 0) return;
-        e.stopPropagation(); // Don't trigger drag
-        setIsResizing(true);
+        e.stopPropagation();
+        setResizeState(type);
         resizeStart.current = {
             x: e.clientX,
             y: e.clientY,
             w: w,
-            h: h
+            h: h,
+            startX: x,
+            startY: y
         };
         e.preventDefault();
     };
@@ -113,26 +146,67 @@ const WindowFrame = ({ windowState, isActive, children }) => {
             if (maximized) return;
 
             if (isDragging) {
-                const newX = e.clientX - dragOffset.current.x;
-                const newY = e.clientY - dragOffset.current.y;
+                let newX = e.clientX - dragOffset.current.x;
+                let newY = e.clientY - dragOffset.current.y;
+
+                // Constrain movement within viewport
+                const maxX = window.innerWidth - w;
+                const maxY = window.innerHeight - STATUSBAR_HEIGHT - h;
+
+                newX = Math.max(0, Math.min(newX, maxX));
+                newY = Math.max(TOOLBAR_HEIGHT, Math.min(newY, maxY));
+
                 dispatch(moveWindow({ id, x: newX, y: newY }));
             }
 
-            if (isResizing) {
+            if (resizeState) {
                 const deltaX = e.clientX - resizeStart.current.x;
                 const deltaY = e.clientY - resizeStart.current.y;
-                const newW = Math.max(200, resizeStart.current.w + deltaX);
-                const newH = Math.max(100, resizeStart.current.h + deltaY);
-                dispatch(resizeWindow({ id, w: newW, h: newH }));
+                let newW = w;
+                let newH = h;
+                let newX = x;
+                let newY = y;
+
+                switch (resizeState) {
+                    case 'right':
+                        newW = Math.max(MIN_WINDOW_SIZE.w, resizeStart.current.w + deltaX);
+                        break;
+                    case 'bottom':
+                        newH = Math.max(MIN_WINDOW_SIZE.h, resizeStart.current.h + deltaY);
+                        break;
+                    case 'left':
+                        newW = Math.max(MIN_WINDOW_SIZE.w, resizeStart.current.w - deltaX);
+                        if (newW > MIN_WINDOW_SIZE.w) {
+                            newX = resizeStart.current.startX + deltaX;
+                        }
+                        break;
+                    case 'top':
+                        newH = Math.max(MIN_WINDOW_SIZE.h, resizeStart.current.h - deltaY);
+                        if (newH > MIN_WINDOW_SIZE.h) {
+                            newY = resizeStart.current.startY + deltaY;
+                        }
+                        break;
+                    case 'corner':
+                        newW = Math.max(MIN_WINDOW_SIZE.w, resizeStart.current.w + deltaX);
+                        newH = Math.max(MIN_WINDOW_SIZE.h, resizeStart.current.h + deltaY);
+                        break;
+                }
+
+                if (newX !== x || newY !== y) {
+                    dispatch(moveWindow({ id, x: newX, y: newY }));
+                }
+                if (newW !== w || newH !== h) {
+                    dispatch(resizeWindow({ id, w: newW, h: newH }));
+                }
             }
         };
 
         const handleMouseUp = () => {
             setIsDragging(false);
-            setIsResizing(false);
+            setResizeState(null);
         };
 
-        if (isDragging || isResizing) {
+        if (isDragging || resizeState) {
             document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
         }
@@ -141,7 +215,7 @@ const WindowFrame = ({ windowState, isActive, children }) => {
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging, isResizing, maximized, id, dispatch]);
+    }, [isDragging, resizeState, maximized, id, x, y, w, h, dispatch]);
 
 
     // Maximize Logic
@@ -168,7 +242,15 @@ const WindowFrame = ({ windowState, isActive, children }) => {
             <Content>
                 {children}
             </Content>
-            {!maximized && <ResizeHandle onMouseDown={handleResizeMouseDown} />}
+            {!maximized && (
+                <>
+                    <ResizeHandle $type="right" onMouseDown={handleResizeMouseDown('right')} />
+                    <ResizeHandle $type="bottom" onMouseDown={handleResizeMouseDown('bottom')} />
+                    <ResizeHandle $type="left" onMouseDown={handleResizeMouseDown('left')} />
+                    <ResizeHandle $type="top" onMouseDown={handleResizeMouseDown('top')} />
+                    <ResizeHandle $type="corner" onMouseDown={handleResizeMouseDown('corner')} />
+                </>
+            )}
         </Frame>
     );
 };

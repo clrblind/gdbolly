@@ -24,7 +24,7 @@ const MenuList = styled.div`
   border: 1px outset #fff;
   min-width: 150px;
   padding: 2px;
-  z-index: 10000;
+  z-index: 999999;
   box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
 `;
 
