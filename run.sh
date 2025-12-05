@@ -19,7 +19,7 @@ echo "Сборка и запуск Web-Olly..."
 
 # Запускаем сборку и старт.
 # Команда запускается на переднем плане, чтобы мы видели логи.
-docker compose up --build
+docker compose up --build --force-recreate
 
 # Эта строка сработает, если docker compose завершится сам (не по Ctrl+C),
 # но для надежности оставим вызов cleanup и здесь.

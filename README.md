@@ -10,6 +10,7 @@
 -   **Memory Patching**: Edit memory bytes directly with hex input, with automatic database persistence.
 -   **Session Management**: Comments and patches are saved per-binary.
 -   **System Log**: Detailed logging of all GDB interactions and user actions.
+-   **Debug Log**: Dedicated window for target application stdout/stderr output.
 -   **Binary Upload**: Support for loading binaries from the `/targets` directory.
 -   **Robustness**: Designed to handle stripped binaries (no debug symbols) and missing source code, ensuring usability in real-world reverse engineering scenarios.
 

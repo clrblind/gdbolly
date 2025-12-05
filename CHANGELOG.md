@@ -2,6 +2,16 @@
 
 # Changelog
 
+## [0.1.3] - 2025-12-05
+### Added
+- **Debug Log Window**: New dedicated window for target application stdout/stderr logs, separated from system logs.
+- **Database Management**: Added "Reset All Databases" button in Settings to clear all session history.
+- **Browser Console Logs**: Option to see browser console logs within the application UI (under Options -> Application).
+
+### Fixed
+- **Scrollbars**: Fixed horizontal scrolling issues in Log windows for long lines.
+- **Reliability**: Improved robustness of ImageBase detection and session cleanup.
+
 ## [0.1.2] - 2025-12-05
 ### Added
 - **UI Enhancements**:
