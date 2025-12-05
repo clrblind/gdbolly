@@ -10,7 +10,7 @@ export const useSessionManager = (apiCall) => {
 
     const handleSessionLoad = async () => {
         dispatch(resetDebuggerState());
-        const data = await apiCall('/session/load');
+        const data = await apiCall('/session/load', {}, 'POST');
         if (data) {
             if (data.error) {
                 dispatch(addSystemLog({ message: `Error loading session: ${data.error}`, type: 'error' }));
@@ -19,7 +19,12 @@ export const useSessionManager = (apiCall) => {
             if (data.comments) dispatch(setComments(data.comments));
             if (data.patches) dispatch(setPatches(data.patches));
             if (data.metadata) dispatch(setMetadata(data.metadata));
-            // Target name stays the same on reload
+
+            // Restore target name if path is provided
+            if (data.path) {
+                const fileName = data.path.split('/').pop();
+                setTargetName(fileName);
+            }
         }
     };
 

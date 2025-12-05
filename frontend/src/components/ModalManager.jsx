@@ -11,7 +11,7 @@ const ModalManager = ({
     commentInput, setCommentInput, handleCommentOk,
     patchInput, setPatchInput, handleEditOk,
     fillByte, setFillByte, handleFillOk, fillInputRef,
-    handleGoTo, handleResetDB, handleFileOpen,
+    handleGoTo, handleResetDB, handleFileOpen, handleSessionLoad,
     saveSetting,
     dispatch,
     apiCall,
@@ -35,7 +35,7 @@ const ModalManager = ({
 
             {activeModal === 'options' && (
                 <XPModal title="Options" onClose={() => setActiveModal(null)} onOk={() => setActiveModal(null)}>
-                    <OptionTabs settings={settings} handleSaveSetting={handleSaveSetting} apiCall={apiCall} />
+                    <OptionTabs settings={settings} handleSaveSetting={handleSaveSetting} apiCall={apiCall} handleSessionLoad={handleSessionLoad} />
                 </XPModal>
             )}
 
@@ -98,7 +98,7 @@ const ModalManager = ({
     );
 };
 
-const OptionTabs = ({ settings, handleSaveSetting, apiCall }) => {
+const OptionTabs = ({ settings, handleSaveSetting, apiCall, handleSessionLoad }) => {
     const [activeTab, setActiveTab] = React.useState('appearance');
 
     // Tab Headers Style
@@ -218,6 +218,8 @@ const OptionTabs = ({ settings, handleSaveSetting, apiCall }) => {
                                 apiCall('/database/reset_all', {}, 'POST').then(res => {
                                     if (res.deleted_count !== undefined) {
                                         alert(`Deleted ${res.deleted_count} databases.`);
+                                        // Reload session to ensure clean state
+                                        handleSessionLoad();
                                     }
                                 });
                             }

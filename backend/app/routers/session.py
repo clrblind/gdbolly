@@ -50,6 +50,9 @@ async def load_binary(payload: dict = Body(None)):
     else:
         path = payload["path"]
     
+    if not path:
+        return {"error": "No binary specified and no last opened session found."}
+
     await broadcast_log(f"Session Load Request: {path}")
     await broadcast_progress(f"Checking permissions...", 10)
 
@@ -100,6 +103,20 @@ async def load_binary(payload: dict = Body(None)):
     
     await gdb.start(path)
     await broadcast_log(f"GDB Started for {path}")
+    
+    # Restore settings (Disassembly Flavor)
+    settings_manager = get_db_manager().settings_manager if hasattr(get_db_manager(), 'settings_manager') else None
+    # Actually, settings are in global app_settings.db, managed by SettingsManager, not target DB.
+    # We should use SettingsManager().
+    from settings_manager import SettingsManager
+    global_settings = await SettingsManager().get_all_settings()
+    flavor = global_settings.get("disassemblyFlavor", "att")
+    try:
+        await gdb.send_command(f"-gdb-set disassembly-flavor {flavor}")
+        await broadcast_log(f"Applied setting: disassembly-flavor={flavor}")
+    except Exception as e:
+        await broadcast_log(f"Error applying flavor: {e}")
+
     await broadcast_progress("Starting Debugger...", 80)
     
     # Update last opened path on successful load
@@ -117,6 +134,7 @@ async def load_binary(payload: dict = Body(None)):
     return {
         "status": "ok", 
         "message": f"Loaded {path}",
+        "path": path,
         "comments": comments,
         "patches": patches,
         "metadata": metadata

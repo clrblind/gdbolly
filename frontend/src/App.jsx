@@ -135,6 +135,7 @@ function App() {
         handleGoTo={handleGoTo}
         handleResetDB={handleResetDB}
         handleFileOpen={handleFileOpen}
+        handleSessionLoad={handleSessionLoad}
         saveSetting={saveSetting}
         dispatch={dispatch}
         apiCall={apiCall}
