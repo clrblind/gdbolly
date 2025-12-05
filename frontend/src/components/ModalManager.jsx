@@ -35,7 +35,7 @@ const ModalManager = ({
 
             {activeModal === 'options' && (
                 <XPModal title="Options" onClose={() => setActiveModal(null)} onOk={() => setActiveModal(null)}>
-                    <OptionTabs settings={settings} handleSaveSetting={handleSaveSetting} />
+                    <OptionTabs settings={settings} handleSaveSetting={handleSaveSetting} apiCall={apiCall} />
                 </XPModal>
             )}
 
@@ -98,7 +98,7 @@ const ModalManager = ({
     );
 };
 
-const OptionTabs = ({ settings, handleSaveSetting }) => {
+const OptionTabs = ({ settings, handleSaveSetting, apiCall }) => {
     const [activeTab, setActiveTab] = React.useState('appearance');
 
     // Tab Headers Style
@@ -186,8 +186,16 @@ const OptionTabs = ({ settings, handleSaveSetting }) => {
                             value={settings.negativeFormat}
                             onChange={(e) => handleSaveSetting('negativeFormat', e.target.value)}
                         >
-                            <option value="signed">Signed (-0xA)</option>
                             <option value="unsigned">Unsigned (FFFFFFF6)</option>
+                        </select>
+                    </label>
+                    <label title="Syntax for disassembly instructions (Intel/AT&T)">Disassembly Syntax:
+                        <select
+                            value={settings.disassemblyFlavor || 'att'}
+                            onChange={(e) => handleSaveSetting('disassemblyFlavor', e.target.value)}
+                        >
+                            <option value="att">AT&T (Default)</option>
+                            <option value="intel">Intel</option>
                         </select>
                     </label>
                 </div>
@@ -203,6 +211,21 @@ const OptionTabs = ({ settings, handleSaveSetting }) => {
                         />
                         Browser console logs
                     </label>
+                    <hr style={{ width: '100%', borderColor: '#fff' }} />
+                    <button
+                        onClick={() => {
+                            if (window.confirm("Are you sure you want to DELETE ALL databases for ALL targets? This cannot be undone.")) {
+                                apiCall('/database/reset_all', {}, 'POST').then(res => {
+                                    if (res.deleted_count !== undefined) {
+                                        alert(`Deleted ${res.deleted_count} databases.`);
+                                    }
+                                });
+                            }
+                        }}
+                        style={{ marginTop: '10px', padding: '5px' }}
+                    >
+                        Clear All Target Data
+                    </button>
                 </div>
             )}
         </div>

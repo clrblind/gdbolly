@@ -71,7 +71,11 @@ export const useAppLogic = () => {
     // Settings Persistence
     const saveSetting = (key, value) => {
         dispatch(updateSettings({ [key]: value }));
-        apiCall('/settings', { key, value }, 'POST', false);
+        apiCall('/settings', { key, value }, 'POST', false).then(() => {
+            if (key === 'disassemblyFlavor') {
+                refreshDisassembly(viewStartAddress);
+            }
+        });
     };
 
     useEffect(() => {

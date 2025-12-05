@@ -15,10 +15,11 @@ RUN dpkg --add-architecture i386 && \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY VERSION .
+COPY backend .
 
 # Запуск с reload для удобства разработки
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

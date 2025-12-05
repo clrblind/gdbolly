@@ -132,6 +132,23 @@ async def reset_database():
         return {"status": "ok"}
     return {"error": "No DB loaded"}
 
+@router.post("/database/reset_all")
+async def reset_all_databases():
+    """Deletes all session databases in /database folder, keeping app_settings.db"""
+    try:
+        if os.path.exists("database"):
+            count = 0
+            for f in os.listdir("database"):
+                if f.endswith(".db") and f != "app_settings.db":
+                    os.remove(os.path.join("database", f))
+                    count += 1
+            await broadcast_log(f"Cleared {count} target databases.")
+            return {"status": "ok", "deleted_count": count}
+        return {"status": "ok", "deleted_count": 0}
+    except Exception as e:
+        await broadcast_log(f"Error resetting all DBs: {e}")
+        return {"error": str(e)}
+
 @router.post("/session/comment")
 async def save_comment(payload: dict = Body(...)):
     address = payload.get("address")
