@@ -12,6 +12,15 @@ const initialState = {
     // Array of objects { id, timestamp, message, type }
     systemLogs: [],
 
+    // Metadata: PID, Arch, ImageBase
+    metadata: {
+        pid: null,
+        arch: null,
+        imageBase: null
+    },
+
+    // Windows Management
+
     // Windows Management
     showSystemLog: false,
 
@@ -40,8 +49,16 @@ const initialState = {
         registerNaming: 'plain',
         listingCase: 'upper',
         numberFormat: 'auto',
+        numberFormat: 'auto',
         negativeFormat: 'signed',
     },
+
+    // UI Feedback
+    loadingProgress: {
+        show: false,
+        message: '',
+        percent: 0
+    }
 };
 
 const formatTime = () => {
@@ -116,6 +133,10 @@ export const debuggerSlice = createSlice({
                 type = action.payload.type || "info";
             }
 
+            if (type === 'error') {
+                state.showSystemLog = true;
+            }
+
             if (state.systemLogs.length > 2000) state.systemLogs.shift();
 
             const entry = {
@@ -131,6 +152,12 @@ export const debuggerSlice = createSlice({
         },
         toggleSystemLogWindow: (state, action) => {
             state.showSystemLog = action.payload !== undefined ? action.payload : !state.showSystemLog;
+        },
+        setProgress: (state, action) => {
+            state.loadingProgress = action.payload;
+        },
+        setMetadata: (state, action) => {
+            state.metadata = action.payload;
         },
 
         // View & History
@@ -234,7 +261,7 @@ export const debuggerSlice = createSlice({
 export const {
     resetDebuggerState,
     setStatus, setThreadId, updateRegisters, setRegisterNames, updateDisassembly,
-    addSystemLog, clearSystemLogs, toggleSystemLogWindow,
+    addSystemLog, clearSystemLogs, toggleSystemLogWindow, setProgress, setMetadata,
     selectAddress, toggleAddressSelection, selectAddressRange,
     setUserComment, setComments, updateSettings,
     setViewStartAddress, pushHistory, navigateBack, navigateForward, clearHistory,

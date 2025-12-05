@@ -34,73 +34,7 @@ const ModalManager = ({
 
             {activeModal === 'options' && (
                 <XPModal title="Options" onClose={() => setActiveModal(null)} onOk={() => setActiveModal(null)}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label>
-                            <input
-                                type="checkbox"
-                                checked={settings.showGdbComments}
-                                onChange={(e) => handleSaveSetting('showGdbComments', e.target.checked)}
-                            />
-                            Show GDB comments
-                        </label>
-                        <label>
-                            <input
-                                type="checkbox"
-                                checked={settings.swapArguments}
-                                onChange={(e) => handleSaveSetting('swapArguments', e.target.checked)}
-                            />
-                            Swap arguments (dst, src)
-                        </label>
-                        <label>Case:
-                            <select
-                                value={settings.listingCase}
-                                onChange={(e) => handleSaveSetting('listingCase', e.target.value)}
-                            >
-                                <option value="upper">UPPERCASE</option>
-                                <option value="lower">lowercase</option>
-                            </select>
-                        </label>
-                        <label>Register Naming:
-                            <select
-                                value={settings.registerNaming}
-                                onChange={(e) => handleSaveSetting('registerNaming', e.target.value)}
-                            >
-                                <option value="plain">Plain (eax)</option>
-                                <option value="percent">GDB (%eax)</option>
-                            </select>
-                        </label>
-                        <label>Copy Hex Format:
-                            <select
-                                value={settings.copyHexFormat}
-                                onChange={(e) => handleSaveSetting('copyHexFormat', e.target.value)}
-                            >
-                                <option value="raw">Raw (AABB)</option>
-                                <option value="space">Space (AA BB)</option>
-                                <option value="prefix">Prefix (0xAA)</option>
-                                <option value="python">Python (\xAA)</option>
-                            </select>
-                        </label>
-                        <label>Number Format:
-                            <select
-                                value={settings.numberFormat}
-                                onChange={(e) => handleSaveSetting('numberFormat', e.target.value)}
-                            >
-                                <option value="auto">Auto ($0xA)</option>
-                                <option value="hex_clean">Hex (0xA)</option>
-                                <option value="hex_asm">Asm (0Ah)</option>
-                                <option value="dec">Decimal (10)</option>
-                            </select>
-                        </label>
-                        <label>Negative Format:
-                            <select
-                                value={settings.negativeFormat}
-                                onChange={(e) => handleSaveSetting('negativeFormat', e.target.value)}
-                            >
-                                <option value="signed">Signed (-0xA)</option>
-                                <option value="unsigned">Unsigned (FFFFFFF6)</option>
-                            </select>
-                        </label>
-                    </div>
+                    <OptionTabs settings={settings} handleSaveSetting={handleSaveSetting} />
                 </XPModal>
             )}
 
@@ -160,6 +94,117 @@ const ModalManager = ({
                 </XPModal>
             )}
         </>
+    );
+};
+
+const OptionTabs = ({ settings, handleSaveSetting }) => {
+    const [activeTab, setActiveTab] = React.useState('appearance');
+
+    // Tab Headers Style
+    const tabHeaderStyle = { display: 'flex', borderBottom: '1px solid #fff', marginBottom: '10px' };
+    const tabBtnStyle = (active) => ({
+        padding: '5px 10px',
+        cursor: 'pointer',
+        background: active ? '#d4d0c8' : '#e0ddd8',
+        border: '1px solid #fff',
+        borderBottom: active ? 'none' : '1px solid #fff',
+        fontWeight: active ? 'bold' : 'normal'
+    });
+
+    return (
+        <div style={{ width: '100%' }}>
+            <div style={tabHeaderStyle}>
+                <div style={tabBtnStyle(activeTab === 'appearance')} onClick={() => setActiveTab('appearance')}>
+                    Appearance
+                </div>
+                <div style={tabBtnStyle(activeTab === 'application')} onClick={() => setActiveTab('application')}>
+                    Application
+                </div>
+            </div>
+
+            {activeTab === 'appearance' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label title="Show comments from GDB disassembly output">
+                        <input
+                            type="checkbox"
+                            checked={settings.showGdbComments}
+                            onChange={(e) => handleSaveSetting('showGdbComments', e.target.checked)}
+                        />
+                        Show GDB comments
+                    </label>
+                    <label title="Swap source and destination in instruction display">
+                        <input
+                            type="checkbox"
+                            checked={settings.swapArguments}
+                            onChange={(e) => handleSaveSetting('swapArguments', e.target.checked)}
+                        />
+                        Swap arguments (dst, src)
+                    </label>
+                    <label title="Case sensitivity for disassembly listing">Case:
+                        <select
+                            value={settings.listingCase}
+                            onChange={(e) => handleSaveSetting('listingCase', e.target.value)}
+                        >
+                            <option value="upper">UPPERCASE</option>
+                            <option value="lower">lowercase</option>
+                        </select>
+                    </label>
+                    <label title="Format of register names in display">Register Naming:
+                        <select
+                            value={settings.registerNaming}
+                            onChange={(e) => handleSaveSetting('registerNaming', e.target.value)}
+                        >
+                            <option value="plain">Plain (eax)</option>
+                            <option value="percent">GDB (%eax)</option>
+                        </select>
+                    </label>
+                    <label title="Format when copying hex bytes to clipboard">Copy Hex Format:
+                        <select
+                            value={settings.copyHexFormat}
+                            onChange={(e) => handleSaveSetting('copyHexFormat', e.target.value)}
+                        >
+                            <option value="raw">Raw (AABB)</option>
+                            <option value="space">Space (AA BB)</option>
+                            <option value="prefix">Prefix (0xAA)</option>
+                            <option value="python">Python (\xAA)</option>
+                        </select>
+                    </label>
+                    <label title="Display format for immediate numbers">Number Format:
+                        <select
+                            value={settings.numberFormat}
+                            onChange={(e) => handleSaveSetting('numberFormat', e.target.value)}
+                        >
+                            <option value="auto">Auto ($0xA)</option>
+                            <option value="hex_clean">Hex (0xA)</option>
+                            <option value="hex_asm">Asm (0Ah)</option>
+                            <option value="dec">Decimal (10)</option>
+                        </select>
+                    </label>
+                    <label title="Display format for negative numbers">Negative Format:
+                        <select
+                            value={settings.negativeFormat}
+                            onChange={(e) => handleSaveSetting('negativeFormat', e.target.value)}
+                        >
+                            <option value="signed">Signed (-0xA)</option>
+                            <option value="unsigned">Unsigned (FFFFFFF6)</option>
+                        </select>
+                    </label>
+                </div>
+            )}
+
+            {activeTab === 'application' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label title="Output application logs to the browser developer console">
+                        <input
+                            type="checkbox"
+                            checked={settings.browserConsoleLogs || false}
+                            onChange={(e) => handleSaveSetting('browserConsoleLogs', e.target.checked)}
+                        />
+                        Browser console logs
+                    </label>
+                </div>
+            )}
+        </div>
     );
 };
 

@@ -15,6 +15,7 @@ import DisassemblyPane from './components/DisassemblyPane';
 import InfoPane from './components/InfoPane';
 import ContextMenu from './components/ContextMenu';
 import SystemLogWindow from './components/SystemLogWindow';
+import ProgressModal from './components/ProgressModal';
 
 function App() {
   const {
@@ -22,6 +23,7 @@ function App() {
     status, settings, selectedAddresses, showSystemLog,
     currentThreadId, layout, contextMenu, activeModal,
     commentInput, patchInput, fillByte, fillInputRef, targetName,
+    loadingProgress, version,
 
     // Setters & Handlers
     setContextMenu, setActiveModal, setCommentInput, setPatchInput, setFillByte,
@@ -39,6 +41,7 @@ function App() {
         setActiveModal={setActiveModal}
         toggleLogs={() => toggleLogs(true)}
         focusDisassembly={() => toggleLogs(false)}
+        version={version}
       />
 
       <MainToolbar
@@ -77,52 +80,41 @@ function App() {
               <VerticalResizer onMouseDown={handleMouseDownVert} />
               <Panel style={{ flex: 1 }}>
                 <div style={{ padding: 5 }}>Stack (Pending...)</div>
-              </Panel>
-            </HorizontalSplit>
-          </>
-        )}
-      </Workspace>
-
-      <StatusBar>
-        <div style={{ width: '80px' }}>{status}</div>
-        <div style={{ flex: 1 }}>Target: {targetName || 'None'}</div>
-        <div style={{ width: '100px' }}>Thread: {currentThreadId || ''}</div>
-      </StatusBar>
-
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={contextMenu.items}
-          onClose={() => setContextMenu(null)}
+                items={contextMenu.items}
+                onClose={() => setContextMenu(null)}
         />
       )}
 
-      <ModalManager
-        activeModal={activeModal}
-        setActiveModal={setActiveModal}
-        settings={settings}
-        selectedAddresses={selectedAddresses}
-        commentInput={commentInput}
-        setCommentInput={setCommentInput}
-        handleCommentOk={handleCommentOk}
-        patchInput={patchInput}
-        setPatchInput={setPatchInput}
-        handleEditOk={handleEditOk}
-        fillByte={fillByte}
-        setFillByte={setFillByte}
-        handleFillOk={handleFillOk}
-        fillInputRef={fillInputRef}
-        handleGoTo={handleGoTo}
-        handleResetDB={handleResetDB}
-        handleFileOpen={handleFileOpen}
-        saveSetting={saveSetting}
-        dispatch={dispatch}
-        apiCall={apiCall}
-      />
+                {/* Progress Modal */}
+                {loadingProgress && loadingProgress.show && (
+                  <ProgressModal message={loadingProgress.message} percent={loadingProgress.percent} />
+                )}
 
-    </MainContainer>
-  );
+                <ModalManager
+                  activeModal={activeModal}
+                  setActiveModal={setActiveModal}
+                  settings={settings}
+                  selectedAddresses={selectedAddresses}
+                  commentInput={commentInput}
+                  setCommentInput={setCommentInput}
+                  handleCommentOk={handleCommentOk}
+                  patchInput={patchInput}
+                  setPatchInput={setPatchInput}
+                  handleEditOk={handleEditOk}
+                  fillByte={fillByte}
+                  setFillByte={setFillByte}
+                  handleFillOk={handleFillOk}
+                  fillInputRef={fillInputRef}
+                  handleGoTo={handleGoTo}
+                  handleResetDB={handleResetDB}
+                  handleFileOpen={handleFileOpen}
+                  saveSetting={saveSetting}
+                  dispatch={dispatch}
+                  apiCall={apiCall}
+                />
+
+              </MainContainer>
+              );
 }
 
-export default App;
+              export default App;

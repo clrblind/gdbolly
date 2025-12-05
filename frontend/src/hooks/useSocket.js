@@ -2,7 +2,9 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch } from 'react-redux';
 import {
-  setStatus, setThreadId, updateRegisters, setRegisterNames, updateDisassembly, addSystemLog
+  setStatus, setThreadId, updateRegisters,
+  setRegisterNames, updateDisassembly, addSystemLog,
+  setProgress
 } from '../store/debuggerSlice';
 
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -26,6 +28,7 @@ export const useSocket = () => {
           dispatch(setRegisterNames(msg.payload));
         }
         if (msg.type === 'disassembly') dispatch(updateDisassembly(msg.payload));
+        if (msg.type === 'progress') dispatch(setProgress(msg.payload));
         if (msg.type === 'system_log') dispatch(addSystemLog(`[LOG] ${msg.payload}`));
       } catch (e) {
         console.error("WS Parse error", e);

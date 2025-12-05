@@ -2,7 +2,7 @@
 import React from 'react';
 import styled from 'styled-components';
 
-const VERSION = '0.1.0';
+
 
 const Bar = styled.div`
   height: 20px;
@@ -74,7 +74,7 @@ const Arrow = styled.span`
   font-size: 9px;
 `;
 
-const MainMenu = ({ handleSessionLoad, setActiveModal, toggleLogs, focusDisassembly }) => {
+const MainMenu = ({ handleSessionLoad, setActiveModal, toggleLogs, focusDisassembly, version }) => {
   return (
     <Bar>
       <MenuItemRoot>
@@ -113,7 +113,7 @@ const MainMenu = ({ handleSessionLoad, setActiveModal, toggleLogs, focusDisassem
       </MenuItemRoot>
       <MenuItemRoot>Help</MenuItemRoot>
       <div style={{ marginLeft: 'auto', padding: '0 10px', color: '#666', fontSize: '11px' }}>
-        v{VERSION}
+        v{version || '...'}
       </div>
     </Bar>
   );

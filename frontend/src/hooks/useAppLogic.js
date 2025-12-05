@@ -25,6 +25,8 @@ export const useAppLogic = () => {
     const disassembly = useSelector(state => state.debug.disassembly);
     const registers = useSelector(state => state.debug.registers);
     const viewStartAddress = useSelector(state => state.debug.viewStartAddress);
+    const loadingProgress = useSelector(state => state.debug.loadingProgress);
+    const [version, setVersion] = useState("0.0.0");
 
     // Layout
     const { layout, handleMouseDownHorz, handleMouseDownVert } = useLayout();
@@ -83,6 +85,9 @@ export const useAppLogic = () => {
                 }
                 dispatch(updateSettings(parsedSettings));
             }
+
+            const verData = await apiCall('/version', null, 'GET', false);
+            if (verData && verData.version) setVersion(verData.version);
         };
         loadSettings();
     }, [dispatch]);
@@ -111,6 +116,7 @@ export const useAppLogic = () => {
         status, settings, selectedAddresses, showSystemLog,
         currentThreadId, layout, contextMenu, activeModal,
         commentInput, patchInput, fillByte, fillInputRef, targetName,
+        loadingProgress, version,
 
         // Setters
         setContextMenu, setActiveModal, setCommentInput, setPatchInput, setFillByte,

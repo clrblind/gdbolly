@@ -64,10 +64,19 @@ const Th = styled.th`
   top: 0;
 `;
 
-const Tr = styled.tr`
-  background: ${props => props.$selected ? '#000080' : 'white'};
-  color: ${props => props.$selected ? 'white' : 'black'};
-  cursor: default;
+const StyledRow = styled.tr`
+  background: ${props => props.$selected ? '#000080' : 'transparent'};
+  color: ${props => {
+    if (props.$selected) return '#fff';
+    if (props.type === 'error') return 'red';
+    if (props.type === 'warning') return '#808000'; // Olive for warnings
+    return '#000';
+  }};
+  cursor: pointer;
+  
+  &:hover {
+    background: ${props => props.$selected ? '#000080' : '#e0e0e0'};
+  }
   /* Use outline instead of border to prevent jitter */
   outline: ${props => props.$hovered ? '1px dotted black' : 'none'};
 `;
@@ -82,19 +91,20 @@ const Td = styled.td`
 `;
 
 const LogRow = ({ log, isSelected, onClick }) => {
-    const [hovered, setHovered] = useState(false);
-    return (
-        <Tr 
-            $selected={isSelected} 
-            $hovered={hovered && !isSelected}
-            onClick={onClick}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-        >
-            <Td style={{borderRight: '1px solid #ccc'}}>{log.timestamp}</Td>
-            <Td title={log.message} style={{color: log.type === 'error' ? 'red' : 'inherit'}}>{log.message}</Td>
-        </Tr>
-    );
+  const [hovered, setHovered] = useState(false);
+  return (
+    <StyledRow
+      $selected={isSelected}
+      $hovered={hovered && !isSelected}
+      type={log.type}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <Td style={{ borderRight: '1px solid #ccc' }}>{log.timestamp}</Td>
+      <Td title={log.message} style={{ color: 'inherit' }}>{log.message}</Td>
+    </StyledRow>
+  );
 };
 
 const SystemLogWindow = ({ onClose }) => {
@@ -106,59 +116,59 @@ const SystemLogWindow = ({ onClose }) => {
   useEffect(() => {
     // Auto scroll if nothing selected or at bottom
     if (!selectedId && bottomRef.current) {
-        bottomRef.current.scrollIntoView({ behavior: "smooth" });
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [logs, selectedId]);
 
   const handleKeyDown = (e) => {
-      // Close on Escape
-      if (e.key === 'Escape') {
-          e.preventDefault();
-          if (onClose) onClose();
-          return;
-      }
+    // Close on Escape
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (onClose) onClose();
+      return;
+    }
 
-      if (logs.length === 0) return;
-      const idx = logs.findIndex(l => l.id === selectedId);
-      
-      if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          const nextIdx = (idx === -1 || idx === logs.length - 1) ? logs.length - 1 : idx + 1;
-          setSelectedId(logs[nextIdx].id);
-      } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          const prevIdx = (idx === -1 || idx === 0) ? 0 : idx - 1;
-          setSelectedId(logs[prevIdx].id);
-      }
+    if (logs.length === 0) return;
+    const idx = logs.findIndex(l => l.id === selectedId);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextIdx = (idx === -1 || idx === logs.length - 1) ? logs.length - 1 : idx + 1;
+      setSelectedId(logs[nextIdx].id);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIdx = (idx === -1 || idx === 0) ? 0 : idx - 1;
+      setSelectedId(logs[prevIdx].id);
+    }
   };
 
   return (
     <WinContainer tabIndex="0" onKeyDown={handleKeyDown}>
-        <WinHeader>
-            <span>System Log</span>
-            <CloseBtn onClick={onClose}>x</CloseBtn>
-        </WinHeader>
-        <TableContainer ref={containerRef}>
-            <Table>
-                <thead style={{height: '20px'}}>
-                    <tr>
-                        <Th style={{width: '120px'}}>Timestamp</Th>
-                        <Th>Message</Th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {logs.map(log => (
-                        <LogRow 
-                            key={log.id} 
-                            log={log}
-                            isSelected={selectedId === log.id}
-                            onClick={() => setSelectedId(log.id)}
-                        />
-                    ))}
-                    <tr ref={bottomRef}></tr>
-                </tbody>
-            </Table>
-        </TableContainer>
+      <WinHeader>
+        <span>System Log</span>
+        <CloseBtn onClick={onClose}>x</CloseBtn>
+      </WinHeader>
+      <TableContainer ref={containerRef}>
+        <Table>
+          <thead style={{ height: '20px' }}>
+            <tr>
+              <Th style={{ width: '120px' }}>Timestamp</Th>
+              <Th>Message</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map(log => (
+              <LogRow
+                key={log.id}
+                log={log}
+                isSelected={selectedId === log.id}
+                onClick={() => setSelectedId(log.id)}
+              />
+            ))}
+            <tr ref={bottomRef}></tr>
+          </tbody>
+        </Table>
+      </TableContainer>
     </WinContainer>
   );
 };

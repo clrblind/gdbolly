@@ -284,7 +284,66 @@ class GDBController:
              await self.msg_queue.put({"type": "status", "payload": "EXITED"})
              return
 
-        # Auto-refresh context on stop
-        await self.send_command("-data-list-register-values x")
+    async def get_metadata(self) -> dict:
+        """Fetches PID, Architecture and Image Base"""
+        metadata = {"pid": None, "arch": None, "imageBase": None}
+        if not self.process:
+            return metadata
+            
+        try:
+            # PID
+            # -list-thread-groups --available gives OS PIDs but simpler is via console
+            # inferior 1 usually holds the pid
+            # Or use 'info proc' if available (Linux)
+            res = await self.execute_command("-interpreter-exec console \"info proc\"")
+            # Parse output? info proc output is unstructured text usually.
+            # "process 12345"
+            # Alternative: gdb.inferior_pid? No, we are communicating via MI.
+            
+            # Let's try 'info proc' and parse
+             # Example output: "process 166"
+            if res and 'payload' in res: # payload key? No, console output comes in stream...
+                # execute_command returns the result record. Console output comes via _read_stdout.
+                # Capturing console output from specific command is hard with current architecture 
+                # because it flows to log/stream.
+                pass
 
-gdb = GDBController()
+            # Better approach for PID: -list-thread-groups i1
+            res = await self.execute_command("-list-thread-groups i1")
+            # ^done,groups=[{id="i1",type="process",pid="166",...}]
+            if res and 'groups' in res and len(res['groups']) > 0:
+                metadata['pid'] = res['groups'][0].get('pid')
+
+            # Architecture
+            # -data-evaluate-expression $_gdb_setting("architecture") (requires new gdb)
+            # or console "show architecture"
+            # Let's try parsing console output? No.
+            # Use 'show architecture' via -interpreter-exec?
+            # It's tricky to capture console output reliably synchronously here without changing `execute_command` 
+            # to capture output.
+            
+            # Use Python API via MI? -interpreter-exec  python "import gdb; print(gdb.execute('show architecture', to_string=True))" ?
+            # Simpler: assume getting generic 'architecture' is hard via MI without stream parsing.
+            # But we can try: 
+            # -data-evaluate-expression (sizeof(void*)) -> 8 (64bit) or 4 (32bit)
+            res = await self.execute_command("-data-evaluate-expression \"sizeof(void*)\"")
+            if res and 'value' in res:
+                size = res['value']
+                if '8' in size: metadata['arch'] = 'x86_64'
+                elif '4' in size: metadata['arch'] = 'x86'
+
+            # Image Base
+            # -interpreter-exec console "info proc mappings"
+            # Again, tricky to capture.
+            # Maybe just use "starti" address?
+            # Or -data-read-memory-bytes using entry point?
+            
+        except Exception as e:
+            await self.log(f"Metadata fetch error: {e}")
+            
+        return metadata
+
+    # Auto-refresh context on stop
+    await self.send_command("-data-list-register-values x")
+
+# gdb = GDBController() - Instantiation moved to __init__.py

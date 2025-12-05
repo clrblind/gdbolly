@@ -2,6 +2,18 @@
 
 # Changelog
 
+## [0.1.2] - 2025-12-05
+### Added
+- **UI Enhancements**:
+    - Progress Bar for loading binaries.
+    - System Log auto-open and error highlighting.
+    - Status Bar now displays PID, Architecture, and Image Base.
+    - Registers Pane now supports scrolling and text selection.
+    - New "Application" tab in Options with Browser Console logs toggle.
+- **Backend**:
+    - Metadata extraction (PID, Arch, Base) from GDB.
+    - Dynamic version endpoint.
+
 ## [0.1.1] - 2025-12-05
 ### Critical Fixes
 - **GDB Initialization**: 
