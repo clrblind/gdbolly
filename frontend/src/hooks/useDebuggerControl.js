@@ -11,8 +11,21 @@ export const useDebuggerControl = (apiCall, setActiveModal) => {
     const showSystemLog = useSelector(state => state.debug.showSystemLog);
 
     const getCurrentIP = () => {
-        const r = registers.find(r => r.number === '16' || r.number === 'rip' || r.number === 'eip');
-        return r ? normalizeAddress(r.value) : null;
+        // 1. Try by name (Most reliable)
+        const named = registers.find(r => r.name === 'rip' || r.name === 'eip');
+        if (named) return normalizeAddress(named.value);
+
+        // 2. Fallback by number
+        // Check 16 (RIP) first, as 8 (R8) exists in 64-bit and is NOT IP.
+        // In 32-bit, 16 might be st0, so this is risky without names, 
+        // but names should always be available now.
+        const r16 = registers.find(r => r.number === '16');
+        if (r16) return normalizeAddress(r16.value);
+
+        const r8 = registers.find(r => r.number === '8');
+        if (r8) return normalizeAddress(r8.value);
+
+        return null;
     };
 
     const handleStep = async (type) => {

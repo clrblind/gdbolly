@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -8,6 +7,7 @@ from settings_manager import SettingsManager
 import asyncio
 import hashlib
 import os
+import stat
 
 # Global Managers
 db_manager = None
@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
     # Startup logic
     await settings_manager.init_db()
     yield
-    # Shutdown logic if needed (e.g. gdb.stop())
+    # Shutdown logic
     await gdb.stop()
 
 app = FastAPI(lifespan=lifespan)
@@ -31,13 +31,23 @@ app.add_middleware(
 )
 
 async def broadcast_log(msg: str):
-    # Frontend handles timestamps and formatting, just send raw message
     await gdb.msg_queue.put({"type": "system_log", "payload": msg})
 
 def bytes_to_hex_str(bytes_list):
-    """[144, 144] -> [0x90, 0x90]"""
+    """[144, 0x90, '0xcc'] -> [0x90, 0x90, 0xcc]"""
     if not bytes_list: return "[]"
-    return "[" + ", ".join([f"0x{b:02x}" for b in bytes_list]) + "]"
+    res = []
+    for b in bytes_list:
+        if isinstance(b, str):
+            res.append(b.lower() if b.startswith("0x") else f"0x{b.lower()}")
+        elif isinstance(b, int):
+            res.append(f"0x{b:02x}")
+        else:
+            res.append(str(b))
+    return "[" + ", ".join(res) + "]"
+
+def int_to_hex_addr(val: int) -> str:
+    return f"0x{val:x}"
 
 @app.get("/settings")
 async def get_settings():
@@ -52,18 +62,60 @@ async def save_setting_endpoint(payload: dict = Body(...)):
         await settings_manager.save_setting(key, value)
     return {"status": "saved"}
 
+# Track last opened binary path
+last_opened_path = "/targets/hello"
+
+@app.get("/targets/list")
+async def list_targets():
+    """List all files in /targets directory with metadata"""
+    targets_dir = "/targets"
+    if not os.path.exists(targets_dir):
+        return {"files": []}
+    
+    files = []
+    try:
+        for item in os.listdir(targets_dir):
+            item_path = os.path.join(targets_dir, item)
+            if os.path.isfile(item_path):
+                stat = os.stat(item_path)
+                files.append({
+                    "name": item,
+                    "size": stat.st_size,
+                    "executable": os.access(item_path, os.X_OK)
+                })
+    except Exception as e:
+        await broadcast_log(f"Error listing targets: {e}")
+        return {"error": str(e), "files": []}
+    
+    return {"files": sorted(files, key=lambda x: x['name'])}
+
 @app.post("/session/load")
-async def load_binary(path: str = "/targets/hello"):
-    global db_manager
+async def load_binary(payload: dict = Body(None)):
+    global db_manager, last_opened_path
+    
+    # If no payload or no path specified, use last opened path
+    if payload is None or "path" not in payload:
+        path = last_opened_path
+    else:
+        path = payload["path"]
+    
     await broadcast_log(f"Session Load Request: {path}")
+
+    # Ensure binary is executable
+    if os.path.exists(path):
+        try:
+            current_mode = os.stat(path).st_mode
+            if not (current_mode & stat.S_IXUSR):
+                os.chmod(path, current_mode | stat.S_IXUSR)
+                await broadcast_log(f"Added executable permission to {path}")
+        except Exception as e:
+            await broadcast_log(f"Warning: Failed to set executable permission: {e}")
     
     await gdb.stop()
     
-    # Fix: Secure compilation without shell injection
     if not os.path.exists(path) and os.path.exists(path + ".c"):
         await broadcast_log(f"Compiling {path}.c ...")
         try:
-            # -g for debug info
             process = await asyncio.create_subprocess_exec(
                 "gcc", "-g", f"{path}.c", "-o", path,
                 stdout=asyncio.subprocess.PIPE,
@@ -77,7 +129,7 @@ async def load_binary(path: str = "/targets/hello"):
             
             await broadcast_log("Compilation successful.")
         except Exception as e:
-            await broadcast_log(f"Compilation Error: {str(e)}")
+            await broadcast_log(f"Compilation Error ({type(e).__name__}): {str(e)}")
             return {"error": str(e)}
     
     try:
@@ -93,9 +145,12 @@ async def load_binary(path: str = "/targets/hello"):
     await gdb.start(path)
     await broadcast_log(f"GDB Started for {path}")
     
+    # Update last opened path on successful load
+    last_opened_path = path
+    
     comments = await db_manager.get_comments()
     patches = await db_manager.get_patches()
-    await broadcast_log(f"DB Loaded: {len(comments)} comments, {len(patches)} patches")
+    await broadcast_log(f"DB Loaded: {len(comments)} comments, {len(patches)} patched bytes")
     
     return {
         "status": "ok", 
@@ -152,62 +207,106 @@ async def get_disassembly(payload: dict = Body(...)):
 
 @app.post("/memory/write")
 async def write_memory(payload: dict = Body(...)):
-    address = payload.get("address")
-    new_bytes = payload.get("bytes")
+    """
+    Byte-level patching logic:
+    1. Read original memory from GDB (chunk).
+    2. Check DB for existing patches to preserve 'original' byte.
+    3. Update DB with new bytes.
+    4. Write bytes to GDB.
+    """
+    address_str = payload.get("address") # hex string "0x4000"
+    raw_bytes = payload.get("bytes")     # list of ints [144] or strings ["0x90"]
     
-    if not address or new_bytes is None:
+    if not address_str or raw_bytes is None:
         return {"error": "Invalid parameters"}
     
-    await broadcast_log(f"Request write at {address}: {bytes_to_hex_str(new_bytes)}")
+    # Normalize inputs for processing
+    new_bytes = []
+    for b in raw_bytes:
+        if isinstance(b, str):
+            # Parse hex string "0x90" or "90"
+            clean = b.replace("0x", "").strip()
+            new_bytes.append(int(clean, 16))
+        else:
+            new_bytes.append(b)
 
-    # 1. Read original bytes (Wait for reliable response)
-    # Using existing read_memory which uses tokens
-    orig_bytes = await gdb.read_memory(address, len(new_bytes))
+    await broadcast_log(f"REQ: Write {len(new_bytes)} bytes at {address_str}: {bytes_to_hex_str(new_bytes)}")
+
+    try:
+        start_addr = int(address_str, 16)
+    except ValueError:
+        return {"error": "Invalid address format"}
+
+    # 1. Read current memory state from GDB (to ensure we have base data)
+    # We read exactly len(new_bytes)
+    current_mem_bytes = await gdb.read_memory(address_str, len(new_bytes))
     
-    if not orig_bytes:
-        msg = f"Failed to read original bytes at {address}. Aborting write."
+    if current_mem_bytes is None:
+        msg = f"Failed to read memory at {address_str}. Aborting patch."
         await broadcast_log(msg)
         return {"error": msg}
 
-    await broadcast_log(f"Original bytes at {address}: {bytes_to_hex_str(orig_bytes)}")
-    
-    # 2. Write new bytes
-    # FIX: Now awaits for actual GDB confirmation via token
-    success = await gdb.write_memory(address, new_bytes)
-    
-    if not success:
-        msg = f"Failed to write memory at {address}."
-        await broadcast_log(msg)
-        return {"error": msg}
-    
-    # 3. Save to DB
-    if db_manager:
-        await db_manager.save_patch(address, orig_bytes, new_bytes)
-        await broadcast_log(f"Patch saved to DB")
+    if not db_manager:
+        return {"error": "DB not loaded"}
 
-    return {"status": "written"}
+    # 2. Process byte-by-byte
+    for i, byte_val in enumerate(new_bytes):
+        curr_addr = start_addr + i
+        curr_addr_hex = int_to_hex_addr(curr_addr)
+        
+        # Check if we already have a patch here
+        existing_patch = await db_manager.get_patch_byte(curr_addr_hex)
+        
+        orig_byte = 0
+        
+        if existing_patch:
+            # If patch exists, the 'orig_byte' in DB is the true original.
+            # Do NOT overwrite it with current_mem_bytes[i] (which is the previous patch)
+            orig_byte = existing_patch['orig_byte']
+        else:
+            # If no patch, the current GDB memory IS the original
+            if i < len(current_mem_bytes):
+                orig_byte = current_mem_bytes[i]
+            else:
+                orig_byte = 0 # Should not happen if read succeeded
+        
+        # Save to DB
+        await db_manager.save_patch_byte(curr_addr_hex, orig_byte, byte_val)
+
+    # 3. Apply to GDB
+    success = await gdb.write_memory(address_str, new_bytes)
+    
+    if success:
+        await broadcast_log(f"Patch applied successfully at {address_str}")
+        return {"status": "written"}
+    else:
+        return {"error": "Failed to write to GDB"}
 
 @app.post("/memory/revert")
 async def revert_memory(payload: dict = Body(...)):
-    address = payload.get("address")
+    """
+    Reverts a SINGLE BYTE at specific address.
+    """
+    address = payload.get("address") # hex string "0x..."
+    
     if not address or not db_manager:
-        return {"error": "Invalid params or DB not loaded"}
+        return {"error": "Invalid params"}
     
     # 1. Get patch info
-    patch = await db_manager.get_patch(address)
+    patch = await db_manager.get_patch_byte(address)
     if not patch:
-        await broadcast_log(f"Revert failed: No patch found for {address}")
+        await broadcast_log(f"Revert ignore: No patch at {address}")
         return {"error": "No patch found"}
     
-    # 2. Restore bytes
-    orig_str = patch['orig_bytes']
-    orig_bytes = [int(orig_str[i:i+2], 16) for i in range(0, len(orig_str), 2)]
+    orig_byte = patch['orig_byte']
     
-    await broadcast_log(f"Reverting {address} to {bytes_to_hex_str(orig_bytes)}")
+    await broadcast_log(f"REQ: Revert {address} to 0x{orig_byte:02x}")
     
-    success = await gdb.write_memory(address, orig_bytes)
+    # 2. Write original byte to GDB
+    success = await gdb.write_memory(address, [orig_byte])
+    
     if not success:
-        return {"error": "Failed to revert memory write"}
+        return {"error": "Failed to revert memory in GDB"}
 
     # 3. Delete from DB
     await db_manager.delete_patch(address)

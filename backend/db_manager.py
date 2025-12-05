@@ -1,4 +1,5 @@
 
+
 import sqlite3
 import os
 import asyncio
@@ -25,13 +26,27 @@ class DBManager:
             )
         ''')
 
-        # Patches table: stores original bytes to allow revert
-        # address is hex string "0x..."
+        # Patches table: GRANULAR BYTE STORAGE
+        # address is HEX STRING (e.g. "0x401000")
+        # orig_byte and new_byte are INTEGERS (0-255)
+        
+        # Check if old table exists and drop it if it has old schema (simple check)
+        # For simplicity in this dev environment, we'll try to create the new one.
+        # If schema mismatch error occurs, we might need manual reset.
+        # But here we define the desired schema.
+        
+        try:
+            cursor.execute('SELECT orig_bytes FROM patches LIMIT 1')
+            # If this succeeds, we have the old schema. We should drop it.
+            cursor.execute('DROP TABLE patches')
+        except sqlite3.OperationalError:
+            pass # Table doesn't exist or is already new schema (or empty)
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS patches (
                 address TEXT PRIMARY KEY,
-                orig_bytes TEXT, -- hex string "9090"
-                new_bytes TEXT,  -- hex string "EBFE"
+                orig_byte INTEGER, 
+                new_byte INTEGER,
                 enabled INTEGER DEFAULT 1
             )
         ''')
@@ -58,25 +73,22 @@ class DBManager:
         rows = await asyncio.to_thread(self._query, "SELECT address, comment FROM comments")
         return {row[0]: row[1] for row in rows}
 
-    async def save_patch(self, address: str, orig_bytes: list, new_bytes: list):
-        # Convert lists [0x90, 0x90] to hex strings "9090"
-        orig_str = "".join([f"{b:02x}" for b in orig_bytes])
-        new_str = "".join([f"{b:02x}" for b in new_bytes])
-        
+    async def save_patch_byte(self, address: str, orig_byte: int, new_byte: int):
+        """Saves a single byte patch."""
         await asyncio.to_thread(self._execute,
-            "INSERT OR REPLACE INTO patches (address, orig_bytes, new_bytes) VALUES (?, ?, ?)",
-            (address, orig_str, new_str))
+            "INSERT OR REPLACE INTO patches (address, orig_byte, new_byte) VALUES (?, ?, ?)",
+            (address, orig_byte, new_byte))
 
-    async def get_patch(self, address: str):
-        rows = await asyncio.to_thread(self._query, "SELECT orig_bytes, new_bytes FROM patches WHERE address = ?", (address,))
+    async def get_patch_byte(self, address: str):
+        """Returns {orig_byte, new_byte} or None"""
+        rows = await asyncio.to_thread(self._query, "SELECT orig_byte, new_byte FROM patches WHERE address = ?", (address,))
         if rows:
-            return {'orig_bytes': rows[0][0], 'new_bytes': rows[0][1]}
+            return {'orig_byte': rows[0][0], 'new_byte': rows[0][1]}
         return None
 
     async def get_patches(self):
-        """Returns list of patches for frontend state"""
-        rows = await asyncio.to_thread(self._query, "SELECT address, new_bytes FROM patches")
-        # Return list of addresses that are patched
+        """Returns list of modified addresses for frontend state"""
+        rows = await asyncio.to_thread(self._query, "SELECT address FROM patches")
         return [row[0] for row in rows]
 
     async def delete_patch(self, address: str):

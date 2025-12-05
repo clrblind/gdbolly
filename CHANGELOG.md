@@ -1,5 +1,27 @@
 
+
 # Changelog
+
+## [0.1.0] - 2025-12-04
+### Added
+- **File Browser**: Добавлено модальное окно "File -> Open" для выбора файлов из директории `/targets`
+- **Last Opened File**: "Reload Binary" теперь перезагружает последний открытый файл вместо дефолтного
+- **Version Display**: Версия программы отображается справа в строке меню
+- **JMP Highlighting**: Команда JMP теперь подсвечивается темно-зеленым цветом
+
+### Changed
+- **GDB Startup**: Добавлен флаг `-q` для сокращения логов при запуске GDB
+- **Status Bar**: Статус-бар теперь показывает актуальное имя загруженного файла и ID потока
+- **Binary Support**: Улучшена поддержка бинарных файлов без отладочных символов - программа запускается даже если breakpoint на main не установлен
+
+### Fixed
+- **Error Handling**: Улучшена обработка ошибок GDB, включая "No symbol table" и неожиданные сообщения от отлаживаемой программы
+- **Runtime Errors**: Исправлена ошибка `NoneType is not iterable` в gdb_controller.py
+- **Code Quality**: Исправлены все выявленные ошибки: Python 3.14->3.13, bare except handlers, deprecated substr()
+## [0.0.9] - 2025-12-02
+### Critical Fixes
+- **GDB Controller**: Completely rewrote `_read_stdout` parsing loop. Fixed a critical bug where `pygdbmi` return types `result` (containing status `done` or `error` in payload) were not correctly matched with awaiting Futures, causing timeouts for all memory operations.
+- **Protocol Logging**: Implemented deep logging for the GDB controller. All raw requests (TX) and responses (RX) are now broadcast to the System Log for transparency.
 
 ## [0.0.8] - 2025-12-02
 ### Security & Stability

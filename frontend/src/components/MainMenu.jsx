@@ -2,6 +2,8 @@
 import React from 'react';
 import styled from 'styled-components';
 
+const VERSION = '0.1.0';
+
 const Bar = styled.div`
   height: 20px;
   background: #d4d0c8;
@@ -75,41 +77,44 @@ const Arrow = styled.span`
 const MainMenu = ({ handleSessionLoad, setActiveModal, toggleLogs, focusDisassembly }) => {
   return (
     <Bar>
-        <MenuItemRoot>
-            File
-            <MenuList>
-                <DropdownItem onClick={handleSessionLoad}>Reload Binary</DropdownItem>
-                <DropdownItemWithSub>
-                    Database <Arrow>▶</Arrow>
-                    <SubMenu>
-                        <DropdownItem onClick={() => setActiveModal('confirm_reset')}>Remove DB</DropdownItem>
-                    </SubMenu>
-                </DropdownItemWithSub>
-                <DropdownItem>Exit</DropdownItem>
-            </MenuList>
-        </MenuItemRoot>
+      <MenuItemRoot>
+        File
+        <MenuList>
+          <DropdownItem onClick={() => setActiveModal('file_browser')}>Open...</DropdownItem>
+          <DropdownItem onClick={handleSessionLoad}>Reload Binary</DropdownItem>
+          <DropdownItemWithSub>
+            Database <Arrow>▶</Arrow>
+            <SubMenu>
+              <DropdownItem onClick={() => setActiveModal('confirm_reset')}>Remove DB</DropdownItem>
+            </SubMenu>
+          </DropdownItemWithSub>
+          <DropdownItem>Exit</DropdownItem>
+        </MenuList>
+      </MenuItemRoot>
 
-        <MenuItemRoot>
-            View
-            <MenuList>
-                <DropdownItem>CPU</DropdownItem>
-                <DropdownItem>Log</DropdownItem>
-                <DropdownItem>Breakpoints</DropdownItem>
-                <DropdownItem>Memory</DropdownItem>
-            </MenuList>
-        </MenuItemRoot>
+      <MenuItemRoot>
+        View
+        <MenuList>
+          <DropdownItem>CPU</DropdownItem>
+          <DropdownItem>Log</DropdownItem>
+          <DropdownItem>Breakpoints</DropdownItem>
+          <DropdownItem>Memory</DropdownItem>
+        </MenuList>
+      </MenuItemRoot>
 
-        <MenuItemRoot>Debug</MenuItemRoot>
-        <MenuItemRoot>Plugins</MenuItemRoot>
-        <MenuItemRoot onClick={() => setActiveModal('options')}>Options</MenuItemRoot>
-        <MenuItemRoot>
-            Window
-            <MenuList>
-                <DropdownItem onClick={focusDisassembly}>CPU</DropdownItem>
-                <DropdownItem onClick={toggleLogs}>System Log</DropdownItem>
-            </MenuList>
-        </MenuItemRoot>
-        <MenuItemRoot>Help</MenuItemRoot>
+      <MenuItemRoot>Debug</MenuItemRoot>
+      <MenuItemRoot>Plugins</MenuItemRoot>
+      <MenuItemRoot onClick={() => setActiveModal('options')}>Options</MenuItemRoot>
+      <MenuItemRoot>Window
+        <MenuList>
+          <DropdownItem onClick={toggleLogs}>System Log</DropdownItem>
+          <DropdownItem onClick={focusDisassembly}>Disassembly</DropdownItem>
+        </MenuList>
+      </MenuItemRoot>
+      <MenuItemRoot>Help</MenuItemRoot>
+      <div style={{ marginLeft: 'auto', padding: '0 10px', color: '#666', fontSize: '11px' }}>
+        v{VERSION}
+      </div>
     </Bar>
   );
 };

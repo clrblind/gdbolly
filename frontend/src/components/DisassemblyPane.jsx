@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
 import { useSelector, useDispatch } from 'react-redux';
@@ -254,7 +255,17 @@ const DisassemblyPane = ({ onContextMenu }) => {
           const normAddr = normalizeAddress(inst.address);
           const isCurrentIP = normAddr === currentIP;
           const isSelected = selectedAddresses.includes(normAddr);
-          const isModified = modifiedAddresses.includes(normAddr);
+          
+          // Check if ANY byte in this instruction range is modified
+          let isModified = false;
+          // Rough estimation of length based on hex dump
+          const len = inst.opcodes ? inst.opcodes.split(' ').filter(x=>x).length : 1;
+          for(let i=0; i<len; i++) {
+              if (modifiedAddresses.includes(offsetAddress(normAddr, i))) {
+                  isModified = true;
+                  break;
+              }
+          }
           
           const parsed = parseInstruction(inst, settings);
           

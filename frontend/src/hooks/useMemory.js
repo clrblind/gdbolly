@@ -1,16 +1,21 @@
 
+
 import { useState, useRef, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-    markAddressModified, removePatch, setComments, setPatches, 
+import {
+    markAddressModified, removePatch, setComments, setPatches,
     setUserComment, resetDebuggerState, addSystemLog
 } from '../store/debuggerSlice';
 import { parseInstruction } from '../utils/asmFormatter';
 import { normalizeAddress, offsetAddress } from '../utils/addressUtils';
 
+const bytesToHex = (bytes) => {
+    return "[" + bytes.map(b => "0x" + b.toString(16).padStart(2, '0')).join(", ") + "]";
+};
+
 export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
     const dispatch = useDispatch();
-    
+
     // Selectors
     const disassembly = useSelector(state => state.debug.disassembly);
     const selectedAddresses = useSelector(state => state.debug.selectedAddresses);
@@ -24,6 +29,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
     const [commentInput, setCommentInput] = useState("");
     const [patchInput, setPatchInput] = useState({ hex: '', ascii: '', unicode: '' });
     const [fillByte, setFillByte] = useState("");
+    const [targetName, setTargetName] = useState("");
     const fillInputRef = useRef(null);
 
     const refreshDisassembly = (addr) => {
@@ -37,11 +43,45 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         dispatch(resetDebuggerState());
         const data = await apiCall('/session/load');
         if (data) {
+            if (data.error) {
+                dispatch(addSystemLog({ message: `Error loading session: ${data.error}`, type: 'error' }));
+                return;
+            }
             if (data.comments) dispatch(setComments(data.comments));
             if (data.patches) dispatch(setPatches(data.patches));
+            // Target name stays the same on reload
         }
     };
-    
+
+    const handleFileOpen = async (path) => {
+        dispatch(resetDebuggerState());
+        dispatch(addSystemLog({ message: `Opening file: ${path}`, type: 'info' }));
+
+        const data = await apiCall('/session/load', { path }, 'POST');
+
+        if (data && data.error) {
+            dispatch(addSystemLog({
+                message: `Failed to open ${path}: ${data.error}`,
+                type: 'error'
+            }));
+            alert(`Error: ${data.error}`);
+            return;
+        }
+
+        if (data) {
+            // Extract filename from path
+            const fileName = path.split('/').pop();
+            setTargetName(fileName);
+
+            if (data.comments) dispatch(setComments(data.comments));
+            if (data.patches) dispatch(setPatches(data.patches));
+            dispatch(addSystemLog({
+                message: `Successfully loaded ${path}`,
+                type: 'info'
+            }));
+        }
+    };
+
     const handleResetDB = async () => {
         dispatch(addSystemLog({ message: "Action: Reset Database", type: 'warning' }));
         await apiCall('/database/reset');
@@ -49,18 +89,40 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
     };
 
     const handleRevert = async () => {
-        const toRevert = selectedAddresses.filter(addr => modifiedAddresses.includes(addr));
-        if (toRevert.length === 0) return;
-        
-        dispatch(addSystemLog(`Action: Revert ${toRevert.length} addresses starting at ${toRevert[0]}`));
+        // Need to find which bytes are actually modified within the selection.
+        // The backend `get_patches` returns a list of ALL modified bytes.
+        // modifiedAddresses in Redux stores these bytes.
 
-        for (let addr of toRevert) {
+        let bytesToRevert = [];
+
+        selectedAddresses.forEach(selAddr => {
+            // Find instruction length to cover range
+            const inst = disassembly.find(i => i.address === selAddr);
+            if (inst) {
+                const len = inst.opcodes ? inst.opcodes.split(' ').filter(x => x).length : 1;
+                for (let i = 0; i < len; i++) {
+                    const addr = offsetAddress(selAddr, i);
+                    if (modifiedAddresses.includes(addr)) {
+                        bytesToRevert.push(addr);
+                    }
+                }
+            } else {
+                // If not in disassembly (unlikely for selection), just check exact addr
+                if (modifiedAddresses.includes(selAddr)) bytesToRevert.push(selAddr);
+            }
+        });
+
+        // Deduplicate
+        bytesToRevert = [...new Set(bytesToRevert)];
+
+        if (bytesToRevert.length === 0) return;
+
+        dispatch(addSystemLog(`Action: Revert ${bytesToRevert.length} bytes`));
+
+        for (let addr of bytesToRevert) {
             const res = await apiCall('/memory/revert', { address: addr });
-            // Strict check: Only update state if backend confirmed
             if (res && res.status === 'reverted') {
                 dispatch(removePatch(addr));
-            } else {
-                // If failed, log (apiCall already logs error to SystemLog)
             }
         }
         refreshDisassembly(viewStartAddress);
@@ -73,7 +135,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         setCommentInput(existing);
         setActiveModal('comment');
     };
-    
+
     const openEditModal = () => {
         const selected = disassembly.filter(d => selectedAddresses.includes(d.address));
         if (selected.length > 0) {
@@ -96,64 +158,67 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         const patches = [];
         disassembly.forEach(d => {
             if (selectedAddresses.includes(d.address)) {
-                const len = d.opcodes ? d.opcodes.split(' ').filter(x=>x).length : 1;
+                const len = d.opcodes ? d.opcodes.split(' ').filter(x => x).length : 1;
                 patches.push({ address: d.address, len });
             }
         });
-        
+
         let successCount = 0;
         let totalModified = [];
 
-        dispatch(addSystemLog(`Action: Patching ${patches.length} lines`));
+        dispatch(addSystemLog(`Action: Patching ${patches.length} blocks`));
 
         for (let p of patches) {
             let payloadBytes = [];
             if (bytes === 'NOP') {
-                 payloadBytes = Array(p.len).fill(0x90);
+                // Fill with 0x90
+                payloadBytes = Array(p.len).fill(0x90);
             } else {
-                 if (Array.isArray(bytes)) {
-                    // Fill with array logic or edit
-                    // If bytes is single value array (fill with byte), use it
+                if (Array.isArray(bytes)) {
                     if (bytes.length === 1 && patches.length > 1) {
-                         payloadBytes = Array(p.len).fill(bytes[0]);
+                        payloadBytes = Array(p.len).fill(bytes[0]);
                     } else if (p.address === selectedAddresses[0]) {
                         payloadBytes = bytes;
                     } else continue;
-                 } else {
-                     continue; 
-                 }
+                } else {
+                    continue;
+                }
             }
-            
+
             if (payloadBytes.length > 0) {
-                const res = await apiCall('/memory/write', { address: p.address, bytes: payloadBytes });
-                
+                // Convert to hex strings for consistency in logging (Requirement: REQ: ... bytes in hex)
+                const hexPayload = payloadBytes.map(b => "0x" + b.toString(16).padStart(2, '0'));
+
+                const res = await apiCall('/memory/write', { address: p.address, bytes: hexPayload });
+
                 if (res && res.status === 'written') {
                     successCount++;
-                    for(let i=0; i<payloadBytes.length; i++) {
+                    // Backend confirms write. We mark ALL individual bytes as modified.
+                    for (let i = 0; i < payloadBytes.length; i++) {
                         totalModified.push(offsetAddress(p.address, i));
                     }
                 }
             }
         }
-        
+
         if (totalModified.length > 0) {
-             dispatch(markAddressModified(totalModified));
-             refreshDisassembly(viewStartAddress);
+            dispatch(markAddressModified(totalModified));
+            refreshDisassembly(viewStartAddress);
         }
-        
+
         setActiveModal(null);
     };
 
     const handleEditOk = () => {
         const raw = patchInput.hex.replace(/\s/g, '');
         const bytes = [];
-        for (let i=0; i < raw.length; i+=2) {
-            const val = parseInt(raw.substr(i, 2), 16);
+        for (let i = 0; i < raw.length; i += 2) {
+            const val = parseInt(raw.substring(i, i + 2), 16);
             if (!isNaN(val)) bytes.push(val);
         }
         if (bytes.length > 0) performPatch(bytes);
     };
-    
+
     const handleFillOk = () => {
         let val = fillByte.trim();
         let b = parseInt(val, 16);
@@ -178,53 +243,62 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         }
         dispatch(addSystemLog("Action: Copied to clipboard"));
     };
-  
+
     const performCopy = (type, subFormat = null) => {
         let targets = selectedAddresses;
-        if (targets.length === 0 && disassembly.length > 0) targets = [disassembly[0].address]; 
-  
+        if (targets.length === 0 && disassembly.length > 0) targets = [disassembly[0].address];
+
         const lines = disassembly.filter(i => targets.includes(i.address));
         let textToCopy = "";
-  
+
         const processedLines = lines.map(inst => {
-             const parsed = parseInstruction(inst, settings);
-             let cmt = userComments[inst.address] || parsed.gdbComment || '';
-             return { ...inst, ...parsed, comment: cmt };
+            const parsed = parseInstruction(inst, settings);
+            let cmt = userComments[inst.address] || parsed.gdbComment || '';
+            return { ...inst, ...parsed, comment: cmt };
         });
-  
+
         if (type === 'line') textToCopy = processedLines.map(i => `${i.address}\t${i.opcodes || ''}\t${i.mnemonic} ${i.operands}\t${i.comment}`).join('\n');
         else if (type === 'address') textToCopy = processedLines.map(i => i.address).join('\n');
         else if (type === 'asm') textToCopy = processedLines.map(i => `${i.mnemonic} ${i.operands}`).join('\n');
         else if (type === 'offset') {
-             textToCopy = processedLines.map(i => {
-                 const addr = BigInt(i.address);
-                 const offset = addr & 0xFFFFFFn; 
-                 return '0x' + offset.toString(16);
-             }).join('\n');
+            textToCopy = processedLines.map(i => {
+                const addr = BigInt(i.address);
+                const offset = addr & 0xFFFFFFn;
+                return '0x' + offset.toString(16);
+            }).join('\n');
         } else if (type === 'hex') {
             const format = subFormat || settings.copyHexFormat;
             textToCopy = processedLines.map(i => {
                 const hex = i.opcodes || "";
                 if (!hex) return "";
-                const bytes = hex.split(' ').filter(x => x); 
+                const bytes = hex.split(' ').filter(x => x);
                 if (format === 'raw') return bytes.join('');
                 if (format === 'space') return bytes.join(' ');
                 if (format === 'prefix') return bytes.map(b => `0x${b}`).join(' ');
                 if (format === 'python') return bytes.map(b => `\\x${b}`).join('');
                 return hex;
-            }).join(''); 
+            }).join('');
         }
         handleCopy(textToCopy);
     };
 
     const handleDisasmContextMenu = (e, inst) => {
-        const isModified = modifiedAddresses.includes(normalizeAddress(inst.address));
+        // Check if ANY byte in this instruction is modified
+        const len = inst.opcodes ? inst.opcodes.split(' ').filter(x => x).length : 1;
+        let isModified = false;
+        for (let i = 0; i < len; i++) {
+            if (modifiedAddresses.includes(offsetAddress(inst.address, i))) {
+                isModified = true;
+                break;
+            }
+        }
+
         setContextMenu({
             x: e.clientX,
             y: e.clientY,
             items: [
                 { label: 'Edit', hotkey: 'Ctrl+E', action: openEditModal },
-                { 
+                {
                     label: 'Binary',
                     separator: true,
                     submenu: [
@@ -236,8 +310,8 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
                 { label: 'Comment', hotkey: ';', action: openCommentModal },
                 { label: 'Copy line', hotkey: 'Ctrl+C', action: () => performCopy('line') },
                 { label: 'Copy address', action: () => performCopy('address') },
-                { 
-                    label: 'Copy...', 
+                {
+                    label: 'Copy...',
                     separator: true,
                     submenu: [
                         { label: 'Copy hex (Default)', action: () => performCopy('hex') },
@@ -246,7 +320,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
                         { label: 'Copy asm', action: () => performCopy('asm') },
                         { label: 'Offset', action: () => performCopy('offset') },
                     ]
-                }, 
+                },
             ]
         });
     };
@@ -271,16 +345,18 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedAddresses, modifiedAddresses]);
+    }, [selectedAddresses, modifiedAddresses, userComments, disassembly, viewStartAddress]);
 
     return {
         contextMenu, setContextMenu,
         commentInput, setCommentInput,
         patchInput, setPatchInput,
         fillByte, setFillByte, fillInputRef,
-        
+        targetName,
+
         refreshDisassembly,
         handleSessionLoad,
+        handleFileOpen,
         handleResetDB,
         handleRevert,
         handleCommentOk,

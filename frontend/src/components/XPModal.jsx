@@ -74,9 +74,13 @@ const XPButton = styled.button`
   font-size: 11px;
   cursor: pointer;
   &:active { border: 1px inset #fff; }
+  &:disabled {
+    color: #808080;
+    cursor: not-allowed;
+  }
 `;
 
-const XPModal = ({ title, children, onClose, onOk }) => {
+const XPModal = ({ title, children, onClose, onOk, okDisabled = false }) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
@@ -87,10 +91,10 @@ const XPModal = ({ title, children, onClose, onOk }) => {
       if (e.key === 'Escape') onClose();
       // Handle Enter
       if (e.key === 'Enter' && onOk) {
-          // Allow textareas to insert newlines
-          if (e.target.tagName === 'TEXTAREA') return;
-          // Otherwise trigger OK
-          onOk();
+        // Allow textareas to insert newlines
+        if (e.target.tagName === 'TEXTAREA') return;
+        // Otherwise trigger OK
+        onOk();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -98,23 +102,23 @@ const XPModal = ({ title, children, onClose, onOk }) => {
   }, [onClose, onOk]);
 
   const handleMouseDown = (e) => {
-      isDragging.current = true;
-      dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+    isDragging.current = true;
+    dragStart.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   };
 
   const handleMouseMove = (e) => {
-      if (!isDragging.current) return;
-      const newX = e.clientX - dragStart.current.x;
-      const newY = e.clientY - dragStart.current.y;
-      setPosition({ x: newX, y: newY });
+    if (!isDragging.current) return;
+    const newX = e.clientX - dragStart.current.x;
+    const newY = e.clientY - dragStart.current.y;
+    setPosition({ x: newX, y: newY });
   };
 
   const handleMouseUp = () => {
-      isDragging.current = false;
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+    isDragging.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
   };
 
   return (
@@ -128,7 +132,7 @@ const XPModal = ({ title, children, onClose, onOk }) => {
           {children}
         </Content>
         <ButtonRow>
-          {onOk && <XPButton onClick={onOk}>OK</XPButton>}
+          {onOk && <XPButton onClick={onOk} disabled={okDisabled}>OK</XPButton>}
           <XPButton onClick={onClose}>Cancel</XPButton>
         </ButtonRow>
       </Window>

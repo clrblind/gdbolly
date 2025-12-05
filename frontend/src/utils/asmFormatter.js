@@ -5,7 +5,7 @@ export const REG_PATTERN = "eax|ebx|ecx|edx|esi|edi|esp|ebp|rax|rbx|rcx|rdx|rsi|
 // Map for Register ID/Number to Name, and vice-versa if needed.
 // GDB often sends register numbers.
 export const REG_NAMES = {
-    "0": "RAX", "1": "RBX", "2": "RCX", "3": "RDX", "4": "RSI", "5": "RDI", 
+    "0": "RAX", "1": "RBX", "2": "RCX", "3": "RDX", "4": "RSI", "5": "RDI",
     "6": "RBP", "7": "RSP", "16": "RIP", "17": "EFLAGS"
 };
 
@@ -18,7 +18,7 @@ export const formatNumber = (text, settings) => {
     return text.replace(/(\$)?(-)?0x([0-9a-fA-F]+)/gi, (match, prefix, sign, hex) => {
         let val = parseInt(hex, 16);
         if (isNaN(val)) return match;
-        
+
         let isNegative = sign === '-';
         let finalVal = isNegative ? -val : val;
 
@@ -33,8 +33,8 @@ export const formatNumber = (text, settings) => {
 
         const absVal = Math.abs(finalVal);
         let formatted = '';
-        
-        switch(settings.numberFormat) {
+
+        switch (settings.numberFormat) {
             case 'hex_clean': // 0xA
                 formatted = `0x${absVal.toString(16)}`;
                 formatted = applyCase(formatted, settings.listingCase);
@@ -48,7 +48,7 @@ export const formatNumber = (text, settings) => {
                 formatted = absVal.toString(10);
                 break;
             default: // auto ($0xA)
-                formatted = `0x${absVal.toString(16)}`; 
+                formatted = `0x${absVal.toString(16)}`;
                 if (settings.listingCase === 'upper') {
                     formatted = formatted.toUpperCase().replace('0X', '0x');
                 } else {
@@ -57,10 +57,10 @@ export const formatNumber = (text, settings) => {
                 break;
         }
 
-        if (isNegative && settings.numberFormat !== 'auto') { 
-           formatted = '-' + formatted;
+        if (isNegative && settings.numberFormat !== 'auto') {
+            formatted = '-' + formatted;
         } else if (isNegative && settings.numberFormat === 'auto') {
-           formatted = '-' + formatted;
+            formatted = '-' + formatted;
         }
 
         if (settings.numberFormat === 'auto') {
@@ -88,12 +88,12 @@ export const parseInstruction = (instData, settings) => {
         mnemonic = codePart;
     } else {
         mnemonic = codePart.substring(0, spaceIdx);
-        operands = codePart.substring(spaceIdx).trim(); 
+        operands = codePart.substring(spaceIdx).trim();
     }
 
     mnemonic = applyCase(mnemonic, settings.listingCase);
     operands = applyCase(operands, settings.listingCase);
-    
+
     // Register Naming
     operands = operands.replace(/%/g, ''); // strip first
     if (settings.registerNaming === 'percent') {
@@ -109,11 +109,11 @@ export const parseInstruction = (instData, settings) => {
         let parts = [];
         let buffer = "";
         let parenDepth = 0;
-        
+
         for (let char of operands) {
             if (char === '(') parenDepth++;
             if (char === ')') parenDepth--;
-            
+
             if (char === ',' && parenDepth === 0) {
                 parts.push(buffer.trim());
                 buffer = "";
@@ -124,12 +124,12 @@ export const parseInstruction = (instData, settings) => {
         parts.push(buffer.trim());
 
         if (parts.length >= 2) {
-             const op1 = parts[0];
-             const rest = parts.slice(1).join(', '); // Join rest with space
-             operands = `${rest},${op1}`;
+            const op1 = parts[0];
+            const rest = parts.slice(1).join(', '); // Join rest with space
+            operands = `${rest},${op1}`;
         }
     }
-    
+
     // Try to resolve relative jumps if gdbComment has an address
     // e.g., jmp 0x10 # 0x400500 <foo>
     // We want the instruction to show 0x400500
@@ -142,7 +142,7 @@ export const parseInstruction = (instData, settings) => {
             // Check if operand is already absolute? Hard to tell.
             // But if user wants non-relative, we prefer the address from comment.
             if (operands.match(/^(-)?0x[0-9a-f]+$/) || operands.match(/^[0-9a-f]+h$/)) {
-                 operands = absAddr;
+                operands = absAddr;
             }
         }
     }

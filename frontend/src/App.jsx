@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useAppLogic } from './hooks/useAppLogic';
-import { 
+import {
   MainContainer, StatusBar,
   Workspace, HorizontalSplit, Panel,
   VerticalResizer, HorizontalResizer
@@ -21,11 +21,11 @@ function App() {
     // State
     status, settings, selectedAddresses, showSystemLog,
     currentThreadId, layout, contextMenu, activeModal,
-    commentInput, patchInput, fillByte, fillInputRef,
-    
+    commentInput, patchInput, fillByte, fillInputRef, targetName,
+
     // Setters & Handlers
     setContextMenu, setActiveModal, setCommentInput, setPatchInput, setFillByte,
-    handleSessionLoad, handleResetDB, handleStep, handleGoTo,
+    handleSessionLoad, handleResetDB, handleStep, handleGoTo, handleFileOpen,
     handleEditOk, handleFillOk, handleCommentOk,
     handleMouseDownHorz, handleMouseDownVert, handleDisasmContextMenu,
     toggleLogs, focusDisassembly,
@@ -34,26 +34,26 @@ function App() {
 
   return (
     <MainContainer>
-      <MainMenu 
-        handleSessionLoad={handleSessionLoad} 
-        setActiveModal={setActiveModal} 
+      <MainMenu
+        handleSessionLoad={handleSessionLoad}
+        setActiveModal={setActiveModal}
         toggleLogs={() => toggleLogs(true)}
         focusDisassembly={() => toggleLogs(false)}
       />
 
-      <MainToolbar 
-        handleSessionLoad={handleSessionLoad} 
-        handleStep={handleStep} 
-        apiCall={apiCall} 
+      <MainToolbar
+        handleSessionLoad={handleSessionLoad}
+        handleStep={handleStep}
+        apiCall={apiCall}
         toggleLogs={toggleLogs}
         setActiveModal={setActiveModal}
       />
 
       <Workspace>
         {showSystemLog ? (
-            <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'absolute', top: 0, left: 0, zIndex: 50 }}>
-                <SystemLogWindow onClose={() => toggleLogs(false)} />
-            </div>
+          <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'absolute', top: 0, left: 0, zIndex: 50 }}>
+            <SystemLogWindow onClose={() => toggleLogs(false)} />
+          </div>
         ) : (
           /* CPU View */
           <>
@@ -72,11 +72,11 @@ function App() {
 
             <HorizontalSplit style={{ flex: 1 }}>
               <Panel style={{ width: `${layout.leftWidthPercent}%` }}>
-                <div style={{padding: 5}}>Memory Dump (Pending...)</div>
+                <div style={{ padding: 5 }}>Memory Dump (Pending...)</div>
               </Panel>
               <VerticalResizer onMouseDown={handleMouseDownVert} />
               <Panel style={{ flex: 1 }}>
-                <div style={{padding: 5}}>Stack (Pending...)</div>
+                <div style={{ padding: 5 }}>Stack (Pending...)</div>
               </Panel>
             </HorizontalSplit>
           </>
@@ -84,21 +84,21 @@ function App() {
       </Workspace>
 
       <StatusBar>
-        <div style={{width: '80px'}}>{status}</div>
-        <div style={{flex: 1}}>Target: hello.exe</div>
-        <div style={{width: '100px'}}>Thread: {currentThreadId || ''}</div>
+        <div style={{ width: '80px' }}>{status}</div>
+        <div style={{ flex: 1 }}>Target: {targetName || 'None'}</div>
+        <div style={{ width: '100px' }}>Thread: {currentThreadId || ''}</div>
       </StatusBar>
 
       {contextMenu && (
-          <ContextMenu 
-            x={contextMenu.x} 
-            y={contextMenu.y} 
-            items={contextMenu.items} 
-            onClose={() => setContextMenu(null)} 
-          />
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
       )}
-      
-      <ModalManager 
+
+      <ModalManager
         activeModal={activeModal}
         setActiveModal={setActiveModal}
         settings={settings}
@@ -115,8 +115,10 @@ function App() {
         fillInputRef={fillInputRef}
         handleGoTo={handleGoTo}
         handleResetDB={handleResetDB}
+        handleFileOpen={handleFileOpen}
         saveSetting={saveSetting}
         dispatch={dispatch}
+        apiCall={apiCall}
       />
 
     </MainContainer>
