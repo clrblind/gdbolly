@@ -45,6 +45,7 @@ export const useSessionManager = (apiCall) => {
 
             if (data.comments) dispatch(setComments(data.comments));
             if (data.patches) dispatch(setPatches(data.patches));
+            if (data.metadata) dispatch(setMetadata(data.metadata));
             dispatch(addSystemLog({
                 message: `Successfully loaded ${path}`,
                 type: 'info'
