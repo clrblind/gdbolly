@@ -50,7 +50,7 @@ const TableContainer = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  /* table-layout: fixed; Removed to allow horizontal scroll */
 `;
 
 const Th = styled.th`
@@ -84,8 +84,6 @@ const StyledRow = styled.tr`
 const Td = styled.td`
   padding: 1px 4px;
   white-space: pre;
-  overflow: hidden;
-  text-overflow: ellipsis;
   border-right: 1px solid #eee;
   border-bottom: 1px solid transparent; 
 `;
@@ -101,8 +99,8 @@ const LogRow = ({ log, isSelected, onClick }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <Td style={{ borderRight: '1px solid #ccc' }}>{log.timestamp}</Td>
-      <Td title={log.message} style={{ color: 'inherit' }}>{log.message}</Td>
+      <Td style={{ borderRight: '1px solid #ccc', minWidth: '120px', display: 'table-cell' }}>{log.timestamp}</Td>
+      <Td style={{ color: 'inherit', display: 'table-cell' }}>{log.message}</Td>
     </StyledRow>
   );
 };
