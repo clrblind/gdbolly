@@ -100,7 +100,7 @@ function App() {
 
         <div style={{ width: '2px', padding: 0, background: 'transparent', border: 'none' }}></div>
 
-        <div style={{ flex: 1, minWidth: '150px' }}>Base: {metadata?.imageBase || '?'}</div>
+        <div style={{ width: '160px' }}>Base: {metadata?.imageBase || '?'}</div>
       </StatusBar>
 
       {contextMenu && (
