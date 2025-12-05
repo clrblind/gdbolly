@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateSettings, setViewStartAddress, toggleSystemLogWindow } from '../store/debuggerSlice';
+import { updateSettings, setViewStartAddress, toggleSystemLogWindow, toggleDebugLogWindow } from '../store/debuggerSlice';
 import { useAPI } from './useAPI';
 import { useSocket } from './useSocket';
 import { useLayout } from './useLayout';
@@ -21,6 +21,7 @@ export const useAppLogic = () => {
     const settings = useSelector(state => state.debug.settings);
     const selectedAddresses = useSelector(state => state.debug.selectedAddresses);
     const showSystemLog = useSelector(state => state.debug.showSystemLog);
+    const showDebugLog = useSelector(state => state.debug.showDebugLog);
     const currentThreadId = useSelector(state => state.debug.currentThreadId);
     const disassembly = useSelector(state => state.debug.disassembly);
     const registers = useSelector(state => state.debug.registers);
@@ -60,12 +61,15 @@ export const useAppLogic = () => {
 
     // Helper
     const toggleLogs = () => dispatch(toggleSystemLogWindow());
+    const toggleDebugLogs = () => dispatch(toggleDebugLogWindow());
+
     const focusDisassembly = () => {
         // Just ensure logs are closed or we just mean visual focus
         // If we had Z-index manager, we would lift it.
         // For now, if logs are covering, close them?
         // Or we can just set focus to the element (done in DisassemblyPane ref).
         if (showSystemLog) dispatch(toggleSystemLogWindow(false));
+        if (showDebugLog) dispatch(toggleDebugLogWindow(false));
     };
 
     // Settings Persistence
@@ -84,8 +88,9 @@ export const useAppLogic = () => {
             if (stored) {
                 const parsedSettings = {};
                 for (const [k, v] of Object.entries(stored)) {
-                    if (v === 'true') parsedSettings[k] = true;
-                    else if (v === 'false') parsedSettings[k] = false;
+                    const valueStr = String(v).toLowerCase();
+                    if (valueStr === 'true') parsedSettings[k] = true;
+                    else if (valueStr === 'false') parsedSettings[k] = false;
                     else parsedSettings[k] = v;
                 }
                 dispatch(updateSettings(parsedSettings));
@@ -118,7 +123,7 @@ export const useAppLogic = () => {
 
     return {
         // State
-        status, settings, selectedAddresses, showSystemLog,
+        status, settings, selectedAddresses, showSystemLog, showDebugLog,
         currentThreadId, layout, contextMenu, activeModal,
         commentInput, patchInput, fillByte, fillInputRef, targetName,
         loadingProgress, version, metadata,
@@ -130,7 +135,7 @@ export const useAppLogic = () => {
         handleSessionLoad, handleResetDB, handleStep, handleGoTo, handleFileOpen,
         handleEditOk, handleFillOk, handleCommentOk,
         handleMouseDownHorz, handleMouseDownVert, handleDisasmContextMenu,
-        toggleLogs, focusDisassembly,
+        toggleLogs, toggleDebugLogs, focusDisassembly,
 
         apiCall,
         saveSetting,

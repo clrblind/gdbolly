@@ -260,8 +260,26 @@ class GDBController:
                     elif payload and 'msg' in payload:
                         await self.log(f"GDB unexpected result: {payload.get('msg')}")
                 
-                elif msg_type == 'console' or msg_type == 'log':
-                    # Program console output or GDB log messages - can be safely ignored
+                elif msg_type == 'target':
+                    # Target output (stdout/stderr of the application)
+                    content = payload
+                    if isinstance(payload, dict):
+                         content = payload.get('payload', '') # specific to some parser versions
+                    
+                    # Clean up content if needed
+                    if content:
+                        await self.msg_queue.put({"type": "target_log", "payload": content})
+
+                elif msg_type == 'console':
+                    # Console output (GDB CLI output). 
+                    # Sometimes helpful to see what's happening, but separate from system log?
+                    # For now, let's treat it as system log but maybe distinct prefix
+                    content = payload
+                    if content:
+                         await self.msg_queue.put({"type": "system_log", "payload": f"[GDB] {content}"})
+
+                elif msg_type == 'log':
+                    # Internal GDB logs
                     pass
                     
         except asyncio.CancelledError:

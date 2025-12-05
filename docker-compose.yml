@@ -8,6 +8,7 @@ services:
       - ./targets:/targets # Прокидываем папку с бинарниками внутрь
       - ./database:/app/database # БД для сохранения состояния
       - ./backend:/app # Mount source code for hot-reload
+      - ./VERSION:/app/VERSION:ro
     cap_add:
       - SYS_PTRACE
     security_opt:

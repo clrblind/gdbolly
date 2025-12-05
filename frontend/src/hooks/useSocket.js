@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useDispatch } from 'react-redux';
 import {
   setStatus, setThreadId, updateRegisters,
-  setRegisterNames, updateDisassembly, addSystemLog,
+  setRegisterNames, updateDisassembly, addSystemLog, addDebugLog,
   setProgress
 } from '../store/debuggerSlice';
 
@@ -30,6 +30,7 @@ export const useSocket = () => {
         if (msg.type === 'disassembly') dispatch(updateDisassembly(msg.payload));
         if (msg.type === 'progress') dispatch(setProgress(msg.payload));
         if (msg.type === 'system_log') dispatch(addSystemLog(`[LOG] ${msg.payload}`));
+        if (msg.type === 'target_log') dispatch(addDebugLog(msg.payload));
       } catch (e) {
         console.error("WS Parse error", e);
       }

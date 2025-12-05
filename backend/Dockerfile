@@ -11,6 +11,7 @@ RUN dpkg --add-architecture i386 && \
     libncurses6:i386 \
     libstdc++6:i386 \
     file \
+    tini \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,8 +19,8 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY VERSION .
 COPY backend .
 
+ENTRYPOINT ["/usr/bin/tini", "--"]
 # Запуск с reload для удобства разработки
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

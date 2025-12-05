@@ -15,12 +15,13 @@ import DisassemblyPane from './components/DisassemblyPane';
 import InfoPane from './components/InfoPane';
 import ContextMenu from './components/ContextMenu';
 import SystemLogWindow from './components/SystemLogWindow';
+import DebugLogWindow from './components/DebugLogWindow';
 import ProgressModal from './components/ProgressModal';
 
 function App() {
   const {
     // State
-    status, settings, selectedAddresses, showSystemLog,
+    status, settings, selectedAddresses, showSystemLog, showDebugLog,
     currentThreadId, layout, contextMenu, activeModal,
     commentInput, patchInput, fillByte, fillInputRef, targetName,
     loadingProgress, version, metadata,
@@ -30,7 +31,7 @@ function App() {
     handleSessionLoad, handleResetDB, handleStep, handleGoTo, handleFileOpen,
     handleEditOk, handleFillOk, handleCommentOk,
     handleMouseDownHorz, handleMouseDownVert, handleDisasmContextMenu,
-    toggleLogs, focusDisassembly,
+    toggleLogs, toggleDebugLogs, focusDisassembly,
     apiCall, saveSetting, dispatch
   } = useAppLogic();
 
@@ -40,6 +41,7 @@ function App() {
         handleSessionLoad={handleSessionLoad}
         setActiveModal={setActiveModal}
         toggleLogs={() => toggleLogs(true)}
+        toggleDebugLogs={() => toggleDebugLogs(true)}
         focusDisassembly={() => toggleLogs(false)}
         version={version}
       />
@@ -49,6 +51,7 @@ function App() {
         handleStep={handleStep}
         apiCall={apiCall}
         toggleLogs={toggleLogs}
+        toggleDebugLogs={toggleDebugLogs}
         setActiveModal={setActiveModal}
       />
 
@@ -56,6 +59,10 @@ function App() {
         {showSystemLog ? (
           <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'absolute', top: 0, left: 0, zIndex: 50 }}>
             <SystemLogWindow onClose={() => toggleLogs(false)} />
+          </div>
+        ) : showDebugLog ? (
+          <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'absolute', top: 0, left: 0, zIndex: 50 }}>
+            <DebugLogWindow onClose={() => toggleDebugLogs(false)} />
           </div>
         ) : (
           /* CPU View */

@@ -41,7 +41,7 @@ const Separator = styled.div`
   margin: 0 2px;
 `;
 
-const MainToolbar = ({ handleSessionLoad, handleStep, apiCall, toggleLogs, setActiveModal }) => {
+const MainToolbar = ({ handleSessionLoad, handleStep, apiCall, toggleLogs, toggleDebugLogs, setActiveModal }) => {
 
   const handleRun = () => apiCall('/control/run', {}, 'POST');
   const handlePause = () => apiCall('/control/pause', {}, 'POST');
@@ -56,6 +56,7 @@ const MainToolbar = ({ handleSessionLoad, handleStep, apiCall, toggleLogs, setAc
       <ToolButton onClick={() => handleStep('step_over')} title="Step Over (F8)">↷</ToolButton>
       <Separator />
       <ToolButton onClick={toggleLogs} title="System Log (L)">L</ToolButton>
+      <ToolButton onClick={toggleDebugLogs} title="Debug Log (D)">D</ToolButton>
       <ToolButton onClick={() => setActiveModal('options')} title="Options (O)">O</ToolButton>
     </Toolbar>
   );

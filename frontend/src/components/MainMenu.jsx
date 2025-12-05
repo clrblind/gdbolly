@@ -71,7 +71,7 @@ const Arrow = styled.span`
   font-size: 9px;
 `;
 
-const MainMenu = ({ handleSessionLoad, setActiveModal, toggleLogs, focusDisassembly, version }) => {
+const MainMenu = ({ handleSessionLoad, setActiveModal, toggleLogs, toggleDebugLogs, focusDisassembly, version }) => {
   const [openMenu, setOpenMenu] = useState(null); // 'file', 'view', 'window', etc.
   const menuRef = useRef(null);
 
@@ -149,6 +149,7 @@ const MainMenu = ({ handleSessionLoad, setActiveModal, toggleLogs, focusDisassem
         Window
         <MenuList $isOpen={openMenu === 'window'}>
           <DropdownItem onClick={() => onItemClick(toggleLogs)}>System Log</DropdownItem>
+          <DropdownItem onClick={() => onItemClick(toggleDebugLogs)}>Debug Log</DropdownItem>
           <DropdownItem onClick={() => onItemClick(focusDisassembly)}>Disassembly</DropdownItem>
         </MenuList>
       </MenuItemRoot>

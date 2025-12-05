@@ -11,6 +11,7 @@ const initialState = {
 
     // Array of objects { id, timestamp, message, type }
     systemLogs: [],
+    debugLogs: [], // Target application output
 
     // Metadata: PID, Arch, ImageBase
     metadata: {
@@ -23,6 +24,7 @@ const initialState = {
 
     // Windows Management
     showSystemLog: false,
+    showDebugLog: false,
 
     // View Control
     viewStartAddress: null,
@@ -49,8 +51,9 @@ const initialState = {
         registerNaming: 'plain',
         listingCase: 'upper',
         numberFormat: 'auto',
-        numberFormat: 'auto',
         negativeFormat: 'signed',
+        disassemblyFlavor: 'att',
+        browserConsoleLogs: false
     },
 
     // UI Feedback
@@ -147,11 +150,22 @@ export const debuggerSlice = createSlice({
             };
             state.systemLogs.push(entry);
         },
+        addDebugLog: (state, action) => {
+            if (state.debugLogs.length > 5000) state.debugLogs.shift();
+            state.debugLogs.push({
+                id: Date.now() + Math.random(),
+                timestamp: formatTime(),
+                message: action.payload
+            });
+        },
         clearSystemLogs: (state) => {
             state.systemLogs = [];
         },
         toggleSystemLogWindow: (state, action) => {
             state.showSystemLog = action.payload !== undefined ? action.payload : !state.showSystemLog;
+        },
+        toggleDebugLogWindow: (state, action) => {
+            state.showDebugLog = action.payload !== undefined ? action.payload : !state.showDebugLog;
         },
         setProgress: (state, action) => {
             state.loadingProgress = action.payload;
@@ -261,7 +275,7 @@ export const debuggerSlice = createSlice({
 export const {
     resetDebuggerState,
     setStatus, setThreadId, updateRegisters, setRegisterNames, updateDisassembly,
-    addSystemLog, clearSystemLogs, toggleSystemLogWindow, setProgress, setMetadata,
+    addSystemLog, addDebugLog, clearSystemLogs, toggleSystemLogWindow, toggleDebugLogWindow, setProgress, setMetadata,
     selectAddress, toggleAddressSelection, selectAddressRange,
     setUserComment, setComments, updateSettings,
     setViewStartAddress, pushHistory, navigateBack, navigateForward, clearHistory,
