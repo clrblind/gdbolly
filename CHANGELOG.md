@@ -13,6 +13,8 @@
 - **Backend**:
     - Metadata extraction (PID, Arch, Base) from GDB.
     - Dynamic version endpoint.
+    - Enhanced support for stripped binaries (ImageBase extraction via `/proc/maps`, no-symbol fallback).
+    - Frontend reliability fixes (prevent invalid 0x0 requests).
 
 ## [0.1.1] - 2025-12-05
 ### Critical Fixes

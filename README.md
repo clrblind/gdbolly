@@ -11,6 +11,7 @@
 -   **Session Management**: Comments and patches are saved per-binary.
 -   **System Log**: Detailed logging of all GDB interactions and user actions.
 -   **Binary Upload**: Support for loading binaries from the `/targets` directory.
+-   **Robustness**: Designed to handle stripped binaries (no debug symbols) and missing source code, ensuring usability in real-world reverse engineering scenarios.
 
 ## Technology Stack
 

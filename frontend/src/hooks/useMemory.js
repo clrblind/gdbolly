@@ -23,7 +23,7 @@ export const useMemory = (apiCall, setActiveModal, getCurrentIP) => {
     // Helper for Disassembly
     const refreshDisassembly = (addr) => {
         const target = addr || getCurrentIP();
-        if (target) {
+        if (target && target !== '0x0' && target !== '0') {
             apiCall('/memory/disassemble', { start: target, count: 100 }, 'POST', false);
         }
     };
